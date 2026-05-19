@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	thingscloud "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/internal/config"
 	memory "github.com/pdurlej/things-cloud-sdk/state/memory"
 )
 
@@ -299,12 +300,14 @@ func (s *mcpServer) ensureCloud() error {
 	if s.client != nil && s.history != nil {
 		return nil
 	}
-	username := os.Getenv("THINGS_USERNAME")
-	password := os.Getenv("THINGS_PASSWORD")
-	if username == "" || password == "" {
-		return fmt.Errorf("THINGS_USERNAME and THINGS_PASSWORD are required")
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
 	}
-	client := thingscloud.New(thingscloud.APIEndpoint, username, password)
+	if cfg.Username == "" || cfg.Password == "" {
+		return fmt.Errorf("THINGS_USERNAME/THINGS_PASSWORD or config username/password are required")
+	}
+	client := thingscloud.New(thingscloud.APIEndpoint, cfg.Username, cfg.Password)
 	if os.Getenv("THINGS_DEBUG") != "" {
 		client.Debug = true
 	}

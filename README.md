@@ -34,6 +34,18 @@ export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 ```
 
+Or use a config file:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
+```
+
+The default path is `~/.things-cloud.json`. Set `THINGS_CONFIG=/path/to/config.json` to override it. Environment variables still take precedence.
+
 **2. Create a simple Go program:**
 
 ```go
@@ -135,6 +147,16 @@ export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 go build -o things-cli ./cmd/things-cli/
 go build -o things-mcp ./cmd/things-mcp/
+```
+
+You can also put credentials in `~/.things-cloud.json`:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
 ```
 
 ### Commands

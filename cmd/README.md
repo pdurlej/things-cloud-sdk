@@ -6,7 +6,17 @@ export THINGS_USERNAME="your@email.com"
 export THINGS_PASSWORD="yourpassword"
 ```
 
-Or create a `.env` file and source it: `source .env`
+Or create `~/.things-cloud.json`:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
+```
+
+Set `THINGS_CONFIG=/path/to/config.json` to use a different file. Environment variables take precedence, so a `.env` file still works when sourced with `source .env`.
 
 ## Production Tools
 
