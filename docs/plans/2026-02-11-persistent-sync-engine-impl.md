@@ -59,7 +59,7 @@ import (
 	"database/sql"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 	_ "modernc.org/sqlite"
 )
 
@@ -350,7 +350,7 @@ package sync
 import (
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // Change represents a semantic change detected during sync
@@ -867,7 +867,7 @@ import (
 	"database/sql"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // getTask retrieves a task from the database by UUID
@@ -1258,7 +1258,7 @@ import (
 	"testing"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func TestTaskStorage(t *testing.T) {
@@ -1440,7 +1440,7 @@ package sync
 import (
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // detectTaskChanges compares old and new task state and returns semantic changes
@@ -1781,7 +1781,7 @@ import (
 	"testing"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func TestDetectTaskChanges(t *testing.T) {
@@ -2084,7 +2084,7 @@ import (
 	"encoding/json"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // processItems processes a batch of items and returns detected changes
@@ -2473,7 +2473,7 @@ import (
 	"database/sql"
 	"time"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // State provides read-only access to the synced Things state
@@ -2855,7 +2855,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	things "github.com/nicolai86/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // TestIntegration tests the full sync flow with mock items
@@ -3122,8 +3122,8 @@ import (
 	"log"
 	"os"
 
-	things "github.com/nicolai86/things-cloud-sdk"
-	"github.com/nicolai86/things-cloud-sdk/sync"
+	things "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/sync"
 )
 
 func Example() {

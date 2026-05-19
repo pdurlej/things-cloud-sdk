@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	things "github.com/arthursoares/things-cloud-sdk"
-	"github.com/arthursoares/things-cloud-sdk/sync"
-	"github.com/arthursoares/things-cloud-sdk/syncutil"
+	things "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/sync"
+	"github.com/pdurlej/things-cloud-sdk/syncutil"
 )
 
 func main() {

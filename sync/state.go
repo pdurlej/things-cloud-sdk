@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	things "github.com/arthursoares/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 // State provides read-only access to the synced Things state

@@ -1,4 +1,4 @@
-module github.com/arthursoares/things-cloud-sdk
+module github.com/pdurlej/things-cloud-sdk
 
 go 1.24.0
 
