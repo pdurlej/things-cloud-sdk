@@ -64,6 +64,15 @@ echo '[
 #   --dry-run               Print the write payload without sending it
 ```
 
+### things-mcp
+
+Stdio MCP server for agent integrations. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes `list_tasks`, `search_tasks`, `create_task`, and `complete_task`.
+
+```bash
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
+things-mcp
+```
+
 ### thingsync
 
 JSON-based sync with workflow views. Persists state to `~/.things-workflow/sync.db`.

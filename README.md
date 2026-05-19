@@ -126,6 +126,7 @@ things-cli complete <task-uuid>
 ## CLI
 
 `things-cli` is a command-line tool for interacting with Things Cloud directly.
+`things-mcp` exposes a small stdio MCP server for agent integrations.
 
 ### Setup
 
@@ -133,6 +134,7 @@ things-cli complete <task-uuid>
 export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 go build -o things-cli ./cmd/things-cli/
+go build -o things-mcp ./cmd/things-mcp/
 ```
 
 ### Commands
@@ -171,6 +173,20 @@ things-cli move-to-today <uuid> [--dry-run]
 
 # Batch (all operations in one HTTP request - much faster!)
 echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch [--dry-run]
+```
+
+### MCP Server
+
+`things-mcp` reads MCP JSON-RPC messages from stdin and writes responses to stdout. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes:
+
+- `list_tasks`
+- `search_tasks`
+- `create_task`
+- `complete_task`
+
+```bash
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
+things-mcp
 ```
 
 ### Examples
