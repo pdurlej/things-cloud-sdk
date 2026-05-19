@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	thingscloud "github.com/arthursoares/things-cloud-sdk"
-	memory "github.com/arthursoares/things-cloud-sdk/state/memory"
 	"github.com/google/uuid"
+	thingscloud "github.com/pdurlej/things-cloud-sdk"
+	memory "github.com/pdurlej/things-cloud-sdk/state/memory"
 )
 
 // ---------------------------------------------------------------------------

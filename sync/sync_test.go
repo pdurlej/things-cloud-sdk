@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	things "github.com/arthursoares/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func TestSync_PaginatesFromStoredCursor(t *testing.T) {

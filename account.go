@@ -96,7 +96,7 @@ func (s *AccountService) Confirm(code string) error {
 // SignUp creates a new thingscloud account and returns a configured client
 func (s *AccountService) SignUp(email, password string) (*Client, error) {
 	data, err := json.Marshal(accountRequestBody{
-		Password:           password,
+		Password: password,
 	})
 	if err != nil {
 		return nil, err

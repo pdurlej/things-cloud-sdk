@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	things "github.com/arthursoares/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 	_ "modernc.org/sqlite"
 )
 

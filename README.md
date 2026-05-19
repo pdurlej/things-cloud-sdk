@@ -2,17 +2,27 @@
 
 [Things](https://culturedcode.com/things/) comes with a cloud based API, which can
 be used to synchronize data between devices.
-This is a golang SDK to interact with that API, opening the API so that you
+This is a Go SDK to interact with that API, opening the API so that you
 can enhance your Things experience on iOS and Mac.
 
-[![Go](https://github.com/arthursoares/things-cloud-sdk/actions/workflows/go.yml/badge.svg)](https://github.com/arthursoares/things-cloud-sdk/actions/workflows/go.yml)
+[![Go](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml/badge.svg)](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml)
+
+## Maintained Fork
+
+This fork is maintained by [pdurlej](https://github.com/pdurlej) as an automation-friendly Things Cloud SDK, with a practical focus on safe OpenClaw and Things integrations. It keeps the cloud API path explicit, favors typed state/change queries, and ships CLI behavior suitable for agent workflows.
+
+The Go module path for this fork is:
+
+```bash
+github.com/pdurlej/things-cloud-sdk
+```
 
 ## Getting Started
 
 ### Installation
 
 ```bash
-go get github.com/arthursoares/things-cloud-sdk
+go get github.com/pdurlej/things-cloud-sdk
 ```
 
 ### Quick Start
@@ -32,7 +42,7 @@ package main
 import (
     "fmt"
     "os"
-    things "github.com/arthursoares/things-cloud-sdk"
+    things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func main() {
@@ -83,7 +93,7 @@ Install and use the command-line tool:
 
 ```bash
 # Install
-go install github.com/arthursoares/things-cloud-sdk/cmd/things-cli@latest
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-cli@latest
 
 # Create a task
 things-cli create "Buy groceries" --when today
@@ -192,7 +202,7 @@ package main
 import (
     "fmt"
     "os"
-    things "github.com/arthursoares/things-cloud-sdk"
+    things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func main() {
@@ -252,8 +262,8 @@ package main
 import (
     "fmt"
     "os"
-    things "github.com/arthursoares/things-cloud-sdk"
-    "github.com/arthursoares/things-cloud-sdk/sync"
+    things "github.com/pdurlej/things-cloud-sdk"
+    "github.com/pdurlej/things-cloud-sdk/sync"
 )
 
 func main() {
@@ -296,11 +306,13 @@ The sync engine detects 40+ semantic change types:
 |----------|---------|
 | **Task Lifecycle** | `TaskCreated`, `TaskCompleted`, `TaskUncompleted`, `TaskTrashed`, `TaskDeleted` |
 | **Task Movement** | `TaskMovedToInbox`, `TaskMovedToToday`, `TaskMovedToAnytime`, `TaskMovedToSomeday`, `TaskMovedToUpcoming` |
-| **Task Organization** | `TaskMovedToProject`, `TaskMovedToArea`, `TaskMovedUnderHeading`, `TaskTagsChanged` |
-| **Task Details** | `TaskTitleChanged`, `TaskNoteChanged`, `TaskDeadlineSet`, `TaskDeadlineRemoved` |
-| **Projects** | `ProjectCreated`, `ProjectCompleted`, `ProjectTrashed`, `ProjectDeleted` |
-| **Areas & Tags** | `AreaCreated`, `AreaDeleted`, `TagCreated`, `TagDeleted` |
-| **Checklists** | `ChecklistItemCreated`, `ChecklistItemCompleted`, `ChecklistItemDeleted` |
+| **Task Organization** | `TaskAssignedToProject`, `TaskAssignedToArea`, `TaskTagsChanged` |
+| **Task Details** | `TaskTitleChanged`, `TaskNoteChanged`, `TaskDeadlineChanged`, `TaskCanceled`, `TaskRestored` |
+| **Projects** | `ProjectCreated`, `ProjectCompleted`, `ProjectTitleChanged`, `ProjectTrashed`, `ProjectRestored`, `ProjectDeleted` |
+| **Headings** | `HeadingCreated`, `HeadingTitleChanged`, `HeadingDeleted` |
+| **Areas & Tags** | `AreaCreated`, `AreaRenamed`, `AreaDeleted`, `TagCreated`, `TagRenamed`, `TagShortcutChanged`, `TagDeleted` |
+| **Checklists** | `ChecklistItemCreated`, `ChecklistItemCompleted`, `ChecklistItemUncompleted`, `ChecklistItemTitleChanged`, `ChecklistItemDeleted` |
+| **Persistence Fallbacks** | `LoggedChange`, `UnknownChange` |
 
 ### State Queries
 

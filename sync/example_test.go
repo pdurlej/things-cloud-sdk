@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	things "github.com/arthursoares/things-cloud-sdk"
-	"github.com/arthursoares/things-cloud-sdk/sync"
+	things "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/sync"
 )
 
 func Example() {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	things "github.com/arthursoares/things-cloud-sdk"
+	things "github.com/pdurlej/things-cloud-sdk"
 )
 
 func TestIntegration(t *testing.T) {
