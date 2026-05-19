@@ -6,7 +6,17 @@ export THINGS_USERNAME="your@email.com"
 export THINGS_PASSWORD="yourpassword"
 ```
 
-Or create a `.env` file and source it: `source .env`
+Or create `~/.things-cloud.json`:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
+```
+
+Set `THINGS_CONFIG=/path/to/config.json` to use a different file. Environment variables take precedence, so a `.env` file still works when sourced with `source .env`.
 
 ## Production Tools
 
@@ -16,25 +26,25 @@ Full-featured CLI for CRUD operations on Things Cloud.
 
 ```bash
 # Read operations (uses an incremental local state cache)
-things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME]
-things-cli today
-things-cli inbox
-things-cli anytime
-things-cli someday
-things-cli upcoming
-things-cli search <query>
-things-cli show <uuid>
+things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+things-cli today [--simple]
+things-cli inbox [--simple]
+things-cli anytime [--simple]
+things-cli someday [--simple]
+things-cli upcoming [--simple]
+things-cli search <query> [--simple]
+things-cli show <uuid> [--simple]
 things-cli areas
 things-cli projects
 things-cli tags
 
 # Write operations (fast - no state loading)
-things-cli create "Task title" [options]
-things-cli edit <uuid> [--title ...] [--note ...] [--when ...]
-things-cli complete <uuid>
-things-cli trash <uuid>
-things-cli purge <uuid>
-things-cli move-to-today <uuid>
+things-cli create "Task title" [options] [--dry-run]
+things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--dry-run]
+things-cli complete <uuid> [--dry-run]
+things-cli trash <uuid> [--dry-run]
+things-cli purge <uuid> [--dry-run]
+things-cli move-to-today <uuid> [--dry-run]
 
 # Batch operations (all in one HTTP request - much faster!)
 echo '[
@@ -42,7 +52,7 @@ echo '[
   {"cmd": "create", "title": "Task 2"},
   {"cmd": "complete", "uuid": "abc123"},
   {"cmd": "move-to-project", "uuid": "def456", "project": "proj-uuid"}
-]' | things-cli batch
+]' | things-cli batch [--dry-run]
 
 # Batch commands: create, complete, trash, purge, move-to-today,
 #                 move-to-project, move-to-area, edit
@@ -61,6 +71,16 @@ echo '[
 #   --tags UUID,UUID,...    Add tags
 #   --type task|project|heading
 #   --checklist "Item 1,Item 2,..."
+#   --dry-run               Print the write payload without sending it
+```
+
+### things-mcp
+
+Stdio MCP server for agent integrations. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes `list_tasks`, `search_tasks`, `create_task`, and `complete_task`.
+
+```bash
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
+things-mcp
 ```
 
 ### thingsync

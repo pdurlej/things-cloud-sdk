@@ -34,6 +34,18 @@ export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 ```
 
+Or use a config file:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
+```
+
+The default path is `~/.things-cloud.json`. Set `THINGS_CONFIG=/path/to/config.json` to override it. Environment variables still take precedence.
+
 **2. Create a simple Go program:**
 
 ```go
@@ -101,6 +113,9 @@ things-cli create "Buy groceries" --when today
 # List today's tasks
 things-cli list --today
 
+# Compact task JSON for OpenClaw-style agents
+things-cli today --simple
+
 # Complete a task
 things-cli complete <task-uuid>
 ```
@@ -123,6 +138,7 @@ things-cli complete <task-uuid>
 ## CLI
 
 `things-cli` is a command-line tool for interacting with Things Cloud directly.
+`things-mcp` exposes a small stdio MCP server for agent integrations.
 
 ### Setup
 
@@ -130,20 +146,31 @@ things-cli complete <task-uuid>
 export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 go build -o things-cli ./cmd/things-cli/
+go build -o things-mcp ./cmd/things-mcp/
+```
+
+You can also put credentials in `~/.things-cloud.json`:
+
+```json
+{
+  "username": "your@email.com",
+  "password": "yourpassword",
+  "cache": "/path/to/things-cli-state.json"
+}
 ```
 
 ### Commands
 
 ```bash
 # Read
-things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME]
-things-cli today
-things-cli inbox
-things-cli anytime
-things-cli someday
-things-cli upcoming
-things-cli search <query>
-things-cli show <uuid>
+things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+things-cli today [--simple]
+things-cli inbox [--simple]
+things-cli anytime [--simple]
+things-cli someday [--simple]
+things-cli upcoming [--simple]
+things-cli search <query> [--simple]
+things-cli show <uuid> [--simple]
 things-cli areas
 things-cli projects
 things-cli tags
@@ -155,19 +182,33 @@ export THINGS_CLI_CACHE=/path/to/things-cli-state.json
 things-cli create "Title" [--note ...] [--when today|anytime|someday|inbox] \
   [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] \
   [--project UUID] [--heading UUID] [--area UUID] \
-  [--tags UUID,...] [--type task|project|heading]
+  [--tags UUID,...] [--type task|project|heading] [--dry-run]
 things-cli create-area "Name"
 things-cli create-tag "Name" [--shorthand KEY] [--parent UUID]
 
 # Modify
-things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...]
-things-cli complete <uuid>
-things-cli trash <uuid>
-things-cli purge <uuid>
-things-cli move-to-today <uuid>
+things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...] [--dry-run]
+things-cli complete <uuid> [--dry-run]
+things-cli trash <uuid> [--dry-run]
+things-cli purge <uuid> [--dry-run]
+things-cli move-to-today <uuid> [--dry-run]
 
 # Batch (all operations in one HTTP request - much faster!)
-echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch
+echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch [--dry-run]
+```
+
+### MCP Server
+
+`things-mcp` reads MCP JSON-RPC messages from stdin and writes responses to stdout. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes:
+
+- `list_tasks`
+- `search_tasks`
+- `create_task`
+- `complete_task`
+
+```bash
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
+things-mcp
 ```
 
 ### Examples
@@ -178,6 +219,9 @@ things-cli create "My Project" --type project --when anytime
 # → {"status":"created","uuid":"BXmAcvS6yK1eDhW31MuZrL","title":"My Project"}
 
 things-cli create "First Task" --project BXmAcvS6yK1eDhW31MuZrL --when today --note "Details here"
+
+# Preview the write payload without sending it to Things Cloud
+things-cli create "Draft from agent" --when today --dry-run
 
 # Create an area and assign tasks
 things-cli create-area "Work"

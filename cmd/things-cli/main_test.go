@@ -78,6 +78,97 @@ func TestHasExplicitSchedule(t *testing.T) {
 	}
 }
 
+func TestStripBoolFlag(t *testing.T) {
+	args, found := stripBoolFlag([]string{"--dry-run", "Task", "--when", "today", "--dry-run"}, "dry-run")
+	if !found {
+		t.Fatal("dry-run flag was not detected")
+	}
+	want := []string{"Task", "--when", "today"}
+	if len(args) != len(want) {
+		t.Fatalf("args = %v, want %v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %v, want %v", args, want)
+		}
+	}
+}
+
+func TestBuildChecklistItemEnvelopes(t *testing.T) {
+	envelopes := buildChecklistItemEnvelopes("task-1", []string{"First", "Second"})
+	if len(envelopes) != 2 {
+		t.Fatalf("len(envelopes) = %d, want 2", len(envelopes))
+	}
+
+	bs, err := json.Marshal(envelopes[0])
+	if err != nil {
+		t.Fatalf("marshal envelope failed: %v", err)
+	}
+	var wire struct {
+		E string `json:"e"`
+		P struct {
+			Tt string   `json:"tt"`
+			Ts []string `json:"ts"`
+		} `json:"p"`
+	}
+	if err := json.Unmarshal(bs, &wire); err != nil {
+		t.Fatalf("unmarshal wire failed: %v", err)
+	}
+	if wire.E != "ChecklistItem3" {
+		t.Fatalf("kind = %q, want ChecklistItem3", wire.E)
+	}
+	if wire.P.Tt != "First" {
+		t.Fatalf("title = %q, want First", wire.P.Tt)
+	}
+	if len(wire.P.Ts) != 1 || wire.P.Ts[0] != "task-1" {
+		t.Fatalf("task refs = %v, want [task-1]", wire.P.Ts)
+	}
+}
+
+func TestParseOutputArgs(t *testing.T) {
+	args, format := parseOutputArgs([]string{"--today", "--format", "simple", "--area", "Work"})
+	if format != "simple" {
+		t.Fatalf("format = %q, want simple", format)
+	}
+	want := []string{"--today", "--area", "Work"}
+	if len(args) != len(want) {
+		t.Fatalf("args = %v, want %v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %v, want %v", args, want)
+		}
+	}
+
+	args, format = parseOutputArgs([]string{"--simple", "--inbox"})
+	if format != "simple" {
+		t.Fatalf("format = %q, want simple", format)
+	}
+	want = []string{"--inbox"}
+	if len(args) != len(want) || args[0] != want[0] {
+		t.Fatalf("args = %v, want %v", args, want)
+	}
+}
+
+func TestTasksToSimpleOutput(t *testing.T) {
+	tasks := []TaskOutput{
+		{UUID: "open-1", Title: "Open Task"},
+		{UUID: "done-1", Title: "Done Task", Status: int(thingscloud.TaskStatusCompleted)},
+		{UUID: "trash-1", Title: "Trash Task", InTrash: true},
+	}
+
+	got := tasksToSimpleOutput(tasks)
+	wantStatus := []string{"open", "completed", "trashed"}
+	for i := range wantStatus {
+		if got[i].Status != wantStatus[i] {
+			t.Fatalf("status[%d] = %q, want %q", i, got[i].Status, wantStatus[i])
+		}
+	}
+	if got[0].UUID != "open-1" || got[0].Title != "Open Task" {
+		t.Fatalf("simple task = %#v, want uuid/title from full output", got[0])
+	}
+}
+
 func TestBatchMoveToProjectUsesNullScheduleDates(t *testing.T) {
 	env, _, err := buildBatchMoveToProject(BatchOp{
 		UUID:    "task-1",

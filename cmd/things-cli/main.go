@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	thingscloud "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/internal/config"
 	memory "github.com/pdurlej/things-cloud-sdk/state/memory"
 )
 
@@ -186,6 +187,25 @@ func parseArgs(args []string) map[string]string {
 	return result
 }
 
+func stripBoolFlag(args []string, name string) ([]string, bool) {
+	flag := "--" + name
+	out := make([]string, 0, len(args))
+	found := false
+	for _, arg := range args {
+		if arg == flag {
+			found = true
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out, found
+}
+
+func argsHaveBoolFlag(args []string, name string) bool {
+	_, found := stripBoolFlag(args, name)
+	return found
+}
+
 func hasExplicitSchedule(opts map[string]string) bool {
 	_, hasWhen := opts["when"]
 	_, hasScheduled := opts["scheduled"]
@@ -208,18 +228,29 @@ func requireArgs(args []string, min int, usage string) {
 	}
 }
 
-func requireEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		fatalf("%s is required", key)
-	}
-	return v
-}
-
 func outputJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	enc.Encode(v)
+}
+
+func outputDryRun(operation string, envelopes []thingscloud.Identifiable) {
+	outputJSON(map[string]any{
+		"status":    "dry-run",
+		"operation": operation,
+		"items":     envelopes,
+	})
+}
+
+func writeOrDryRun(history *thingscloud.History, dryRun bool, operation string, envelopes ...thingscloud.Identifiable) bool {
+	if dryRun {
+		outputDryRun(operation, envelopes)
+		return true
+	}
+	if err := history.Write(envelopes...); err != nil {
+		fatal(operation, err)
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -498,8 +529,9 @@ func commandNeedsHistoryHead(cmd string) bool {
 }
 
 func cliStateCachePath() string {
-	if path := os.Getenv("THINGS_CLI_CACHE"); path != "" {
-		return path
+	cfg, err := config.Load()
+	if err == nil && cfg.Cache != "" {
+		return cfg.Cache
 	}
 	if dir, err := os.UserCacheDir(); err == nil && dir != "" {
 		return filepath.Join(dir, "things-cloud-sdk", "things-cli-state.json")
@@ -554,10 +586,18 @@ func saveCLIStateCache(path string, cache *cliStateCache) error {
 }
 
 func initCLI(syncHistoryHead bool) *cliContext {
-	username := requireEnv("THINGS_USERNAME")
-	password := requireEnv("THINGS_PASSWORD")
+	cfg, err := config.Load()
+	if err != nil {
+		fatal("load config", err)
+	}
+	if cfg.Username == "" {
+		fatalf("THINGS_USERNAME or config username is required")
+	}
+	if cfg.Password == "" {
+		fatalf("THINGS_PASSWORD or config password is required")
+	}
 
-	c := thingscloud.New(thingscloud.APIEndpoint, username, password)
+	c := thingscloud.New(thingscloud.APIEndpoint, cfg.Username, cfg.Password)
 	if os.Getenv("THINGS_DEBUG") != "" {
 		c.Debug = true
 	}
@@ -655,6 +695,12 @@ type TaskOutput struct {
 	ParentIDs     []string `json:"parentIds,omitempty"`
 }
 
+type SimpleTaskOutput struct {
+	UUID   string `json:"uuid"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
 func taskToOutput(t *thingscloud.Task) TaskOutput {
 	out := TaskOutput{
 		UUID:      t.UUID,
@@ -676,6 +722,79 @@ func taskToOutput(t *thingscloud.Task) TaskOutput {
 		out.DeadlineDate = &s
 	}
 	return out
+}
+
+func taskStatusString(t TaskOutput) string {
+	if t.InTrash {
+		return "trashed"
+	}
+	switch thingscloud.TaskStatus(t.Status) {
+	case thingscloud.TaskStatusCompleted:
+		return "completed"
+	case thingscloud.TaskStatusCanceled:
+		return "canceled"
+	default:
+		return "open"
+	}
+}
+
+func taskToSimpleOutput(t TaskOutput) SimpleTaskOutput {
+	return SimpleTaskOutput{
+		UUID:   t.UUID,
+		Title:  t.Title,
+		Status: taskStatusString(t),
+	}
+}
+
+func tasksToSimpleOutput(tasks []TaskOutput) []SimpleTaskOutput {
+	out := make([]SimpleTaskOutput, len(tasks))
+	for i, task := range tasks {
+		out[i] = taskToSimpleOutput(task)
+	}
+	return out
+}
+
+func outputTasks(tasks []TaskOutput, format string) {
+	if format == "simple" {
+		outputJSON(tasksToSimpleOutput(tasks))
+		return
+	}
+	outputJSON(tasks)
+}
+
+func outputTask(task TaskOutput, format string) {
+	if format == "simple" {
+		outputJSON(taskToSimpleOutput(task))
+		return
+	}
+	outputJSON(task)
+}
+
+func parseOutputArgs(args []string) ([]string, string) {
+	format := "full"
+	args, simple := stripBoolFlag(args, "simple")
+	if simple {
+		format = "simple"
+	}
+
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--format" {
+			if i+1 >= len(args) {
+				fatalf("--format requires full or simple")
+			}
+			switch args[i+1] {
+			case "full", "simple":
+				format = args[i+1]
+			default:
+				fatalf("unknown format: %s", args[i+1])
+			}
+			i++
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out, format
 }
 
 func sameDay(a, b time.Time) bool {
@@ -758,22 +877,26 @@ func listTasks(state *memory.State, opts map[string]string) []TaskOutput {
 }
 
 func cmdList(state *memory.State, args []string) {
-	outputJSON(listTasks(state, parseArgs(args)))
+	args, format := parseOutputArgs(args)
+	outputTasks(listTasks(state, parseArgs(args)), format)
 }
 
-func cmdListWithOpts(state *memory.State, opts map[string]string) {
-	outputJSON(listTasks(state, opts))
+func cmdListWithOpts(state *memory.State, opts map[string]string, args []string) {
+	_, format := parseOutputArgs(args)
+	outputTasks(listTasks(state, opts), format)
 }
 
 func cmdSearch(state *memory.State, args []string) {
+	args, format := parseOutputArgs(args)
 	requireArgs(args, 1, "things-cli search <query>")
-	cmdListWithOpts(state, map[string]string{"search": strings.Join(args, " ")})
+	outputTasks(listTasks(state, map[string]string{"search": strings.Join(args, " ")}), format)
 }
 
-func cmdShow(state *memory.State, uuid string) {
+func cmdShow(state *memory.State, uuid string, args []string) {
+	_, format := parseOutputArgs(args)
 	for _, task := range state.Tasks {
 		if strings.HasPrefix(task.UUID, uuid) {
-			outputJSON(taskToOutput(task))
+			outputTask(taskToOutput(task), format)
 			return
 		}
 	}
@@ -855,8 +978,9 @@ func containsStr(slice []string, s string) bool {
 // Write commands
 // ---------------------------------------------------------------------------
 
-func cmdWriteChecklistItems(history *thingscloud.History, taskUUID string, items []string) {
+func buildChecklistItemEnvelopes(taskUUID string, items []string) []thingscloud.Identifiable {
 	now := nowTs()
+	envelopes := make([]thingscloud.Identifiable, 0, len(items))
 	for i, title := range items {
 		itemUUID := generateUUID()
 		payload := ChecklistItemCreatePayload{
@@ -870,14 +994,21 @@ func cmdWriteChecklistItems(history *thingscloud.History, taskUUID string, items
 			Lt: false,
 			Xx: defaultExtension(),
 		}
-		env := writeEnvelope{id: itemUUID, action: 0, kind: "ChecklistItem3", payload: payload}
-		if err := history.Write(env); err != nil {
-			fatal("create checklist item", err)
-		}
+		envelopes = append(envelopes, writeEnvelope{id: itemUUID, action: 0, kind: "ChecklistItem3", payload: payload})
+	}
+	return envelopes
+}
+
+func cmdWriteChecklistItems(history *thingscloud.History, dryRun bool, taskUUID string, items []string) {
+	envelopes := buildChecklistItemEnvelopes(taskUUID, items)
+	if writeOrDryRun(history, dryRun, "create checklist item", envelopes...) {
+		return
 	}
 }
 
 func cmdCreate(history *thingscloud.History, args []string) {
+	var dryRun bool
+	args, dryRun = stripBoolFlag(args, "dry-run")
 	requireArgs(args, 1, "things-cli create \"Title\" [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--project UUID] [--heading UUID] [--area UUID] [--tags UUID,...] [--type task|project|heading] [--uuid UUID] [--checklist \"Item 1,Item 2,...\"]")
 
 	title := args[0]
@@ -890,28 +1021,35 @@ func cmdCreate(history *thingscloud.History, args []string) {
 
 	payload := newTaskCreatePayload(title, opts)
 	env := writeEnvelope{id: taskUUID, action: 0, kind: "Task6", payload: payload}
-	if err := history.Write(env); err != nil {
-		fatal("create task", err)
-	}
 
-	// Write checklist items (if any) after the task
+	envelopes := []thingscloud.Identifiable{env}
 	if v, ok := opts["checklist"]; ok && v != "" {
-		cmdWriteChecklistItems(history, taskUUID, strings.Split(v, ","))
+		envelopes = append(envelopes, buildChecklistItemEnvelopes(taskUUID, strings.Split(v, ","))...)
+	}
+	if writeOrDryRun(history, dryRun, "create task", envelopes...) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "created", "uuid": taskUUID, "title": title})
 }
 
 func cmdAddChecklist(history *thingscloud.History, taskUUID string, args []string) {
+	var dryRun bool
+	args, dryRun = stripBoolFlag(args, "dry-run")
 	requireArgs(args, 1, `things-cli add-checklist <task-uuid> "Item 1,Item 2,Item 3"`)
 
 	items := strings.Split(args[0], ",")
-	cmdWriteChecklistItems(history, taskUUID, items)
+	cmdWriteChecklistItems(history, dryRun, taskUUID, items)
+	if dryRun {
+		return
+	}
 
 	outputJSON(map[string]string{"status": "checklist-added", "uuid": taskUUID, "items": fmt.Sprintf("%d", len(items))})
 }
 
 func cmdEdit(history *thingscloud.History, taskUUID string, args []string) {
+	var dryRun bool
+	args, dryRun = stripBoolFlag(args, "dry-run")
 	opts := parseArgs(args)
 	if len(opts) == 0 {
 		fatalf("Usage: things-cli edit <uuid> [--title ...] [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--area UUID] [--project UUID] [--heading UUID] [--tags UUID,...]")
@@ -981,37 +1119,37 @@ func cmdEdit(history *thingscloud.History, taskUUID string, args []string) {
 	}
 
 	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: u.build()}
-	if err := history.Write(env); err != nil {
-		fatal("edit task", err)
+	if writeOrDryRun(history, dryRun, "edit task", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "updated", "uuid": taskUUID})
 }
 
-func cmdComplete(history *thingscloud.History, taskUUID string) {
+func cmdComplete(history *thingscloud.History, taskUUID string, dryRun bool) {
 	ts := nowTs()
 	u := newTaskUpdate().Status(3).StopDate(ts)
 
 	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: u.build()}
-	if err := history.Write(env); err != nil {
-		fatal("complete task", err)
+	if writeOrDryRun(history, dryRun, "complete task", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "completed", "uuid": taskUUID})
 }
 
-func cmdTrash(history *thingscloud.History, taskUUID string) {
+func cmdTrash(history *thingscloud.History, taskUUID string, dryRun bool) {
 	u := newTaskUpdate().Trash(true)
 
 	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: u.build()}
-	if err := history.Write(env); err != nil {
-		fatal("trash task", err)
+	if writeOrDryRun(history, dryRun, "trash task", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "trashed", "uuid": taskUUID})
 }
 
-func cmdPurge(history *thingscloud.History, taskUUID string) {
+func cmdPurge(history *thingscloud.History, taskUUID string, dryRun bool) {
 	tombstoneUUID := generateUUID()
 	payload := map[string]any{
 		"dloid": taskUUID,
@@ -1019,25 +1157,27 @@ func cmdPurge(history *thingscloud.History, taskUUID string) {
 	}
 
 	env := writeEnvelope{id: tombstoneUUID, action: 0, kind: "Tombstone2", payload: payload}
-	if err := history.Write(env); err != nil {
-		fatal("purge task", err)
+	if writeOrDryRun(history, dryRun, "purge task", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "purged", "uuid": taskUUID})
 }
 
-func cmdMoveToToday(history *thingscloud.History, taskUUID string) {
+func cmdMoveToToday(history *thingscloud.History, taskUUID string, dryRun bool) {
 	u := newTaskUpdate().Today()
 
 	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: u.build()}
-	if err := history.Write(env); err != nil {
-		fatal("move to today", err)
+	if writeOrDryRun(history, dryRun, "move to today", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "moved-to-today", "uuid": taskUUID})
 }
 
 func cmdCreateArea(history *thingscloud.History, args []string) {
+	var dryRun bool
+	args, dryRun = stripBoolFlag(args, "dry-run")
 	requireArgs(args, 1, `things-cli create-area "Name" [--tags UUID,...] [--uuid UUID]`)
 
 	title := args[0]
@@ -1061,14 +1201,16 @@ func cmdCreateArea(history *thingscloud.History, args []string) {
 	}
 
 	env := writeEnvelope{id: areaUUID, action: 0, kind: "Area3", payload: payload}
-	if err := history.Write(env); err != nil {
-		fatal("create area", err)
+	if writeOrDryRun(history, dryRun, "create area", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "created", "uuid": areaUUID, "title": title})
 }
 
 func cmdCreateTag(history *thingscloud.History, args []string) {
+	var dryRun bool
+	args, dryRun = stripBoolFlag(args, "dry-run")
 	requireArgs(args, 1, `things-cli create-tag "Name" [--shorthand KEY] [--parent UUID]`)
 
 	title := args[0]
@@ -1099,8 +1241,8 @@ func cmdCreateTag(history *thingscloud.History, args []string) {
 	}
 
 	env := writeEnvelope{id: tagUUID, action: 0, kind: "Tag4", payload: payload}
-	if err := history.Write(env); err != nil {
-		fatal("create tag", err)
+	if writeOrDryRun(history, dryRun, "create tag", env) {
+		return
 	}
 
 	outputJSON(map[string]string{"status": "created", "uuid": tagUUID, "title": title})
@@ -1126,7 +1268,7 @@ type BatchOp struct {
 	Extra    map[string]string `json:"extra,omitempty"` // for any additional opts
 }
 
-func cmdBatch(history *thingscloud.History) {
+func cmdBatch(history *thingscloud.History, dryRun bool) {
 	// Read JSON from stdin
 	var ops []BatchOp
 	if err := json.NewDecoder(os.Stdin).Decode(&ops); err != nil {
@@ -1151,6 +1293,16 @@ func cmdBatch(history *thingscloud.History) {
 	}
 
 	// Send all in one request
+	if dryRun {
+		outputJSON(map[string]any{
+			"status":     "dry-run",
+			"operation":  "batch write",
+			"operations": len(envelopes),
+			"items":      envelopes,
+			"results":    results,
+		})
+		return
+	}
 	if err := history.Write(envelopes...); err != nil {
 		fatal("batch write", err)
 	}
@@ -1373,14 +1525,14 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: things-cli <command> [args]
 
 Read commands (use an incremental local state cache):
-  list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME]
-  today
-  inbox
-  anytime
-  someday
-  upcoming
-  search <query>
-  show <uuid>
+  list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+  today [--simple|--format full|simple]
+  inbox [--simple|--format full|simple]
+  anytime [--simple|--format full|simple]
+  someday [--simple|--format full|simple]
+  upcoming [--simple|--format full|simple]
+  search <query> [--simple|--format full|simple]
+  show <uuid> [--simple|--format full|simple]
   areas
   projects
   tags
@@ -1393,20 +1545,20 @@ Write commands (fast — skip state loading):
          [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD]
          [--project UUID] [--heading UUID] [--area UUID]
          [--tags UUID,...] [--type task|project|heading] [--uuid UUID]
-         [--checklist "Item 1,Item 2,..."]
-  create-area "Name" [--tags UUID,...] [--uuid UUID]
-  create-tag "Name" [--shorthand KEY] [--parent UUID]
-  add-checklist <task-uuid> "Item 1,Item 2,Item 3"
+         [--checklist "Item 1,Item 2,..."] [--dry-run]
+  create-area "Name" [--tags UUID,...] [--uuid UUID] [--dry-run]
+  create-tag "Name" [--shorthand KEY] [--parent UUID] [--dry-run]
+  add-checklist <task-uuid> "Item 1,Item 2,Item 3" [--dry-run]
   edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...]
          [--scheduled ...] [--area UUID] [--project UUID]
-         [--heading UUID] [--tags UUID,...]
-  complete <uuid>
-  trash <uuid>
-  purge <uuid>
-  move-to-today <uuid>
+         [--heading UUID] [--tags UUID,...] [--dry-run]
+  complete <uuid> [--dry-run]
+  trash <uuid> [--dry-run]
+  purge <uuid> [--dry-run]
+  move-to-today <uuid> [--dry-run]
 
 Batch command (reads JSON from stdin, sends all ops in one HTTP request):
-  batch
+  batch [--dry-run]
 
   Example: echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch
 
@@ -1429,27 +1581,29 @@ func main() {
 	}
 
 	cmd := os.Args[1]
-	ctx := initCLI(commandNeedsHistoryHead(cmd))
+	args := os.Args[2:]
+	dryRun := argsHaveBoolFlag(args, "dry-run")
+	ctx := initCLI(commandNeedsHistoryHead(cmd) && !dryRun)
 
 	switch cmd {
 	// Read commands — need state
 	case "list":
-		cmdList(ctx.loadState(), os.Args[2:])
+		cmdList(ctx.loadState(), args)
 	case "today":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"today": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"today": "true"}, args)
 	case "inbox":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"inbox": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"inbox": "true"}, args)
 	case "anytime":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"anytime": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"anytime": "true"}, args)
 	case "someday":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"someday": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"someday": "true"}, args)
 	case "upcoming":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"upcoming": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"upcoming": "true"}, args)
 	case "search":
-		cmdSearch(ctx.loadState(), os.Args[2:])
+		cmdSearch(ctx.loadState(), args)
 	case "show":
-		requireArgs(os.Args[2:], 1, "things-cli show <uuid>")
-		cmdShow(ctx.loadState(), os.Args[2])
+		requireArgs(args, 1, "things-cli show <uuid>")
+		cmdShow(ctx.loadState(), args[0], args[1:])
 	case "areas":
 		cmdAreas(ctx.loadState())
 	case "projects":
@@ -1459,31 +1613,36 @@ func main() {
 
 	// Write commands — skip state loading
 	case "create":
-		cmdCreate(ctx.history, os.Args[2:])
+		cmdCreate(ctx.history, args)
 	case "create-area":
-		cmdCreateArea(ctx.history, os.Args[2:])
+		cmdCreateArea(ctx.history, args)
 	case "create-tag":
-		cmdCreateTag(ctx.history, os.Args[2:])
+		cmdCreateTag(ctx.history, args)
 	case "add-checklist":
-		requireArgs(os.Args[2:], 2, `things-cli add-checklist <task-uuid> "Item 1,Item 2,Item 3"`)
-		cmdAddChecklist(ctx.history, os.Args[2], os.Args[3:])
+		requireArgs(args, 2, `things-cli add-checklist <task-uuid> "Item 1,Item 2,Item 3"`)
+		cmdAddChecklist(ctx.history, args[0], args[1:])
 	case "edit":
-		requireArgs(os.Args[2:], 1, "things-cli edit <uuid> [--title ...] [--note ...]")
-		cmdEdit(ctx.history, os.Args[2], os.Args[3:])
+		requireArgs(args, 1, "things-cli edit <uuid> [--title ...] [--note ...]")
+		cmdEdit(ctx.history, args[0], args[1:])
 	case "complete":
-		requireArgs(os.Args[2:], 1, "things-cli complete <uuid>")
-		cmdComplete(ctx.history, os.Args[2])
+		args, dryRun = stripBoolFlag(args, "dry-run")
+		requireArgs(args, 1, "things-cli complete <uuid>")
+		cmdComplete(ctx.history, args[0], dryRun)
 	case "trash":
-		requireArgs(os.Args[2:], 1, "things-cli trash <uuid>")
-		cmdTrash(ctx.history, os.Args[2])
+		args, dryRun = stripBoolFlag(args, "dry-run")
+		requireArgs(args, 1, "things-cli trash <uuid>")
+		cmdTrash(ctx.history, args[0], dryRun)
 	case "purge":
-		requireArgs(os.Args[2:], 1, "things-cli purge <uuid>")
-		cmdPurge(ctx.history, os.Args[2])
+		args, dryRun = stripBoolFlag(args, "dry-run")
+		requireArgs(args, 1, "things-cli purge <uuid>")
+		cmdPurge(ctx.history, args[0], dryRun)
 	case "move-to-today":
-		requireArgs(os.Args[2:], 1, "things-cli move-to-today <uuid>")
-		cmdMoveToToday(ctx.history, os.Args[2])
+		args, dryRun = stripBoolFlag(args, "dry-run")
+		requireArgs(args, 1, "things-cli move-to-today <uuid>")
+		cmdMoveToToday(ctx.history, args[0], dryRun)
 	case "batch":
-		cmdBatch(ctx.history)
+		_, dryRun = stripBoolFlag(args, "dry-run")
+		cmdBatch(ctx.history, dryRun)
 
 	default:
 		fatalf("unknown command: %s", cmd)
