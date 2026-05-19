@@ -29,12 +29,12 @@ things-cli projects
 things-cli tags
 
 # Write operations (fast - no state loading)
-things-cli create "Task title" [options]
-things-cli edit <uuid> [--title ...] [--note ...] [--when ...]
-things-cli complete <uuid>
-things-cli trash <uuid>
-things-cli purge <uuid>
-things-cli move-to-today <uuid>
+things-cli create "Task title" [options] [--dry-run]
+things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--dry-run]
+things-cli complete <uuid> [--dry-run]
+things-cli trash <uuid> [--dry-run]
+things-cli purge <uuid> [--dry-run]
+things-cli move-to-today <uuid> [--dry-run]
 
 # Batch operations (all in one HTTP request - much faster!)
 echo '[
@@ -42,7 +42,7 @@ echo '[
   {"cmd": "create", "title": "Task 2"},
   {"cmd": "complete", "uuid": "abc123"},
   {"cmd": "move-to-project", "uuid": "def456", "project": "proj-uuid"}
-]' | things-cli batch
+]' | things-cli batch [--dry-run]
 
 # Batch commands: create, complete, trash, purge, move-to-today,
 #                 move-to-project, move-to-area, edit
@@ -61,6 +61,7 @@ echo '[
 #   --tags UUID,UUID,...    Add tags
 #   --type task|project|heading
 #   --checklist "Item 1,Item 2,..."
+#   --dry-run               Print the write payload without sending it
 ```
 
 ### thingsync
