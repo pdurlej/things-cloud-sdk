@@ -25,8 +25,8 @@ type dbExecutor interface {
 
 // Syncer manages persistent sync with Things Cloud
 type Syncer struct {
-	rawDB   *sql.DB     // underlying connection for Close() and Begin()
-	db      dbExecutor  // current executor (db or tx)
+	rawDB   *sql.DB    // underlying connection for Close() and Begin()
+	db      dbExecutor // current executor (db or tx)
 	client  *things.Client
 	history *things.History
 }
@@ -250,14 +250,22 @@ func (s *Syncer) scanChangeLog(rows *sql.Rows) ([]Change, error) {
 			timestamp:   time.Unix(syncedAt, 0),
 		}
 
-		// Return UnknownChange with the change type as details
-		// A more complete implementation would reconstruct full typed changes
-		changes = append(changes, UnknownChange{
+		var rawPayload string
+		if payload.Valid {
+			rawPayload = payload.String
+		}
+
+		changes = append(changes, LoggedChange{
 			baseChange: base,
+			changeType: changeType,
 			entityType: entityType,
 			entityUUID: entityUUID,
-			Details:    changeType,
+			payload:    rawPayload,
 		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return changes, nil
