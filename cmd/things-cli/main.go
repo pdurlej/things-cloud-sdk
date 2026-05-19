@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	thingscloud "github.com/pdurlej/things-cloud-sdk"
+	"github.com/pdurlej/things-cloud-sdk/internal/config"
 	memory "github.com/pdurlej/things-cloud-sdk/state/memory"
 )
 
@@ -225,14 +226,6 @@ func requireArgs(args []string, min int, usage string) {
 	if len(args) < min {
 		fatalf("Usage: %s", usage)
 	}
-}
-
-func requireEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		fatalf("%s is required", key)
-	}
-	return v
 }
 
 func outputJSON(v any) {
@@ -536,8 +529,9 @@ func commandNeedsHistoryHead(cmd string) bool {
 }
 
 func cliStateCachePath() string {
-	if path := os.Getenv("THINGS_CLI_CACHE"); path != "" {
-		return path
+	cfg, err := config.Load()
+	if err == nil && cfg.Cache != "" {
+		return cfg.Cache
 	}
 	if dir, err := os.UserCacheDir(); err == nil && dir != "" {
 		return filepath.Join(dir, "things-cloud-sdk", "things-cli-state.json")
@@ -592,10 +586,18 @@ func saveCLIStateCache(path string, cache *cliStateCache) error {
 }
 
 func initCLI(syncHistoryHead bool) *cliContext {
-	username := requireEnv("THINGS_USERNAME")
-	password := requireEnv("THINGS_PASSWORD")
+	cfg, err := config.Load()
+	if err != nil {
+		fatal("load config", err)
+	}
+	if cfg.Username == "" {
+		fatalf("THINGS_USERNAME or config username is required")
+	}
+	if cfg.Password == "" {
+		fatalf("THINGS_PASSWORD or config password is required")
+	}
 
-	c := thingscloud.New(thingscloud.APIEndpoint, username, password)
+	c := thingscloud.New(thingscloud.APIEndpoint, cfg.Username, cfg.Password)
 	if os.Getenv("THINGS_DEBUG") != "" {
 		c.Debug = true
 	}
