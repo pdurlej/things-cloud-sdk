@@ -125,6 +125,50 @@ func TestBuildChecklistItemEnvelopes(t *testing.T) {
 	}
 }
 
+func TestParseOutputArgs(t *testing.T) {
+	args, format := parseOutputArgs([]string{"--today", "--format", "simple", "--area", "Work"})
+	if format != "simple" {
+		t.Fatalf("format = %q, want simple", format)
+	}
+	want := []string{"--today", "--area", "Work"}
+	if len(args) != len(want) {
+		t.Fatalf("args = %v, want %v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %v, want %v", args, want)
+		}
+	}
+
+	args, format = parseOutputArgs([]string{"--simple", "--inbox"})
+	if format != "simple" {
+		t.Fatalf("format = %q, want simple", format)
+	}
+	want = []string{"--inbox"}
+	if len(args) != len(want) || args[0] != want[0] {
+		t.Fatalf("args = %v, want %v", args, want)
+	}
+}
+
+func TestTasksToSimpleOutput(t *testing.T) {
+	tasks := []TaskOutput{
+		{UUID: "open-1", Title: "Open Task"},
+		{UUID: "done-1", Title: "Done Task", Status: int(thingscloud.TaskStatusCompleted)},
+		{UUID: "trash-1", Title: "Trash Task", InTrash: true},
+	}
+
+	got := tasksToSimpleOutput(tasks)
+	wantStatus := []string{"open", "completed", "trashed"}
+	for i := range wantStatus {
+		if got[i].Status != wantStatus[i] {
+			t.Fatalf("status[%d] = %q, want %q", i, got[i].Status, wantStatus[i])
+		}
+	}
+	if got[0].UUID != "open-1" || got[0].Title != "Open Task" {
+		t.Fatalf("simple task = %#v, want uuid/title from full output", got[0])
+	}
+}
+
 func TestBatchMoveToProjectUsesNullScheduleDates(t *testing.T) {
 	env, _, err := buildBatchMoveToProject(BatchOp{
 		UUID:    "task-1",

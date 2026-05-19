@@ -101,6 +101,9 @@ things-cli create "Buy groceries" --when today
 # List today's tasks
 things-cli list --today
 
+# Compact task JSON for OpenClaw-style agents
+things-cli today --simple
+
 # Complete a task
 things-cli complete <task-uuid>
 ```
@@ -136,14 +139,14 @@ go build -o things-cli ./cmd/things-cli/
 
 ```bash
 # Read
-things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME]
-things-cli today
-things-cli inbox
-things-cli anytime
-things-cli someday
-things-cli upcoming
-things-cli search <query>
-things-cli show <uuid>
+things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+things-cli today [--simple]
+things-cli inbox [--simple]
+things-cli anytime [--simple]
+things-cli someday [--simple]
+things-cli upcoming [--simple]
+things-cli search <query> [--simple]
+things-cli show <uuid> [--simple]
 things-cli areas
 things-cli projects
 things-cli tags

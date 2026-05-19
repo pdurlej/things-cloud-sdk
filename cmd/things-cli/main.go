@@ -693,6 +693,12 @@ type TaskOutput struct {
 	ParentIDs     []string `json:"parentIds,omitempty"`
 }
 
+type SimpleTaskOutput struct {
+	UUID   string `json:"uuid"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
 func taskToOutput(t *thingscloud.Task) TaskOutput {
 	out := TaskOutput{
 		UUID:      t.UUID,
@@ -714,6 +720,79 @@ func taskToOutput(t *thingscloud.Task) TaskOutput {
 		out.DeadlineDate = &s
 	}
 	return out
+}
+
+func taskStatusString(t TaskOutput) string {
+	if t.InTrash {
+		return "trashed"
+	}
+	switch thingscloud.TaskStatus(t.Status) {
+	case thingscloud.TaskStatusCompleted:
+		return "completed"
+	case thingscloud.TaskStatusCanceled:
+		return "canceled"
+	default:
+		return "open"
+	}
+}
+
+func taskToSimpleOutput(t TaskOutput) SimpleTaskOutput {
+	return SimpleTaskOutput{
+		UUID:   t.UUID,
+		Title:  t.Title,
+		Status: taskStatusString(t),
+	}
+}
+
+func tasksToSimpleOutput(tasks []TaskOutput) []SimpleTaskOutput {
+	out := make([]SimpleTaskOutput, len(tasks))
+	for i, task := range tasks {
+		out[i] = taskToSimpleOutput(task)
+	}
+	return out
+}
+
+func outputTasks(tasks []TaskOutput, format string) {
+	if format == "simple" {
+		outputJSON(tasksToSimpleOutput(tasks))
+		return
+	}
+	outputJSON(tasks)
+}
+
+func outputTask(task TaskOutput, format string) {
+	if format == "simple" {
+		outputJSON(taskToSimpleOutput(task))
+		return
+	}
+	outputJSON(task)
+}
+
+func parseOutputArgs(args []string) ([]string, string) {
+	format := "full"
+	args, simple := stripBoolFlag(args, "simple")
+	if simple {
+		format = "simple"
+	}
+
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--format" {
+			if i+1 >= len(args) {
+				fatalf("--format requires full or simple")
+			}
+			switch args[i+1] {
+			case "full", "simple":
+				format = args[i+1]
+			default:
+				fatalf("unknown format: %s", args[i+1])
+			}
+			i++
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out, format
 }
 
 func sameDay(a, b time.Time) bool {
@@ -796,22 +875,26 @@ func listTasks(state *memory.State, opts map[string]string) []TaskOutput {
 }
 
 func cmdList(state *memory.State, args []string) {
-	outputJSON(listTasks(state, parseArgs(args)))
+	args, format := parseOutputArgs(args)
+	outputTasks(listTasks(state, parseArgs(args)), format)
 }
 
-func cmdListWithOpts(state *memory.State, opts map[string]string) {
-	outputJSON(listTasks(state, opts))
+func cmdListWithOpts(state *memory.State, opts map[string]string, args []string) {
+	_, format := parseOutputArgs(args)
+	outputTasks(listTasks(state, opts), format)
 }
 
 func cmdSearch(state *memory.State, args []string) {
+	args, format := parseOutputArgs(args)
 	requireArgs(args, 1, "things-cli search <query>")
-	cmdListWithOpts(state, map[string]string{"search": strings.Join(args, " ")})
+	outputTasks(listTasks(state, map[string]string{"search": strings.Join(args, " ")}), format)
 }
 
-func cmdShow(state *memory.State, uuid string) {
+func cmdShow(state *memory.State, uuid string, args []string) {
+	_, format := parseOutputArgs(args)
 	for _, task := range state.Tasks {
 		if strings.HasPrefix(task.UUID, uuid) {
-			outputJSON(taskToOutput(task))
+			outputTask(taskToOutput(task), format)
 			return
 		}
 	}
@@ -1440,14 +1523,14 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: things-cli <command> [args]
 
 Read commands (use an incremental local state cache):
-  list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME]
-  today
-  inbox
-  anytime
-  someday
-  upcoming
-  search <query>
-  show <uuid>
+  list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+  today [--simple|--format full|simple]
+  inbox [--simple|--format full|simple]
+  anytime [--simple|--format full|simple]
+  someday [--simple|--format full|simple]
+  upcoming [--simple|--format full|simple]
+  search <query> [--simple|--format full|simple]
+  show <uuid> [--simple|--format full|simple]
   areas
   projects
   tags
@@ -1505,20 +1588,20 @@ func main() {
 	case "list":
 		cmdList(ctx.loadState(), args)
 	case "today":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"today": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"today": "true"}, args)
 	case "inbox":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"inbox": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"inbox": "true"}, args)
 	case "anytime":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"anytime": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"anytime": "true"}, args)
 	case "someday":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"someday": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"someday": "true"}, args)
 	case "upcoming":
-		cmdListWithOpts(ctx.loadState(), map[string]string{"upcoming": "true"})
+		cmdListWithOpts(ctx.loadState(), map[string]string{"upcoming": "true"}, args)
 	case "search":
 		cmdSearch(ctx.loadState(), args)
 	case "show":
 		requireArgs(args, 1, "things-cli show <uuid>")
-		cmdShow(ctx.loadState(), args[0])
+		cmdShow(ctx.loadState(), args[0], args[1:])
 	case "areas":
 		cmdAreas(ctx.loadState())
 	case "projects":
