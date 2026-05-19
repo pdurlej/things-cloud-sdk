@@ -6,12 +6,13 @@ import (
 	"hash/crc32"
 	"math/big"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	thingscloud "github.com/arthursoares/things-cloud-sdk"
 	memory "github.com/arthursoares/things-cloud-sdk/state/memory"
+	"github.com/google/uuid"
 )
 
 // ---------------------------------------------------------------------------
@@ -92,15 +93,15 @@ type TaskCreatePayload struct {
 
 // ChecklistItemCreatePayload — all 9 fields for checklist item creation.
 type ChecklistItemCreatePayload struct {
-	Cd   float64       `json:"cd"`
-	Md   *float64      `json:"md"`
-	Tt   string        `json:"tt"`
-	Ss   int           `json:"ss"`
-	Sp   *float64      `json:"sp"`
-	Ix   int           `json:"ix"`
-	Ts   []string      `json:"ts"`
-	Lt   bool          `json:"lt"`
-	Xx   WireExtension `json:"xx"`
+	Cd float64       `json:"cd"`
+	Md *float64      `json:"md"`
+	Tt string        `json:"tt"`
+	Ss int           `json:"ss"`
+	Sp *float64      `json:"sp"`
+	Ix int           `json:"ix"`
+	Ts []string      `json:"ts"`
+	Lt bool          `json:"lt"`
+	Xx WireExtension `json:"xx"`
 }
 
 // TagCreatePayload — all 5 fields for tag creation.
@@ -453,7 +454,78 @@ type cliContext struct {
 	history *thingscloud.History
 }
 
-func initCLI() *cliContext {
+type cliStateCache struct {
+	HistoryID   string        `json:"historyId"`
+	ServerIndex int           `json:"serverIndex"`
+	State       *memory.State `json:"state"`
+}
+
+func commandNeedsHistoryHead(cmd string) bool {
+	switch cmd {
+	case "create", "create-area", "create-tag", "add-checklist", "edit", "complete", "trash", "purge", "move-to-today", "batch":
+		return true
+	default:
+		return false
+	}
+}
+
+func cliStateCachePath() string {
+	if path := os.Getenv("THINGS_CLI_CACHE"); path != "" {
+		return path
+	}
+	if dir, err := os.UserCacheDir(); err == nil && dir != "" {
+		return filepath.Join(dir, "things-cloud-sdk", "things-cli-state.json")
+	}
+	return filepath.Join(os.TempDir(), "things-cloud-sdk", "things-cli-state.json")
+}
+
+func loadCLIStateCache(path string) (*cliStateCache, error) {
+	bs, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var cache cliStateCache
+	if err := json.Unmarshal(bs, &cache); err != nil {
+		return nil, err
+	}
+	if cache.State == nil {
+		cache.State = memory.NewState()
+	} else {
+		normalizeMemoryState(cache.State)
+	}
+	return &cache, nil
+}
+
+func normalizeMemoryState(state *memory.State) {
+	if state.Areas == nil {
+		state.Areas = map[string]*thingscloud.Area{}
+	}
+	if state.Tasks == nil {
+		state.Tasks = map[string]*thingscloud.Task{}
+	}
+	if state.Tags == nil {
+		state.Tags = map[string]*thingscloud.Tag{}
+	}
+	if state.CheckListItems == nil {
+		state.CheckListItems = map[string]*thingscloud.CheckListItem{}
+	}
+}
+
+func saveCLIStateCache(path string, cache *cliStateCache) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	bs, err := json.MarshalIndent(cache, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, bs, 0o600)
+}
+
+func initCLI(syncHistoryHead bool) *cliContext {
 	username := requireEnv("THINGS_USERNAME")
 	password := requireEnv("THINGS_PASSWORD")
 
@@ -470,30 +542,69 @@ func initCLI() *cliContext {
 	if err != nil {
 		fatal("get history", err)
 	}
-	if err := history.Sync(); err != nil {
-		fatal("sync history", err)
+	if syncHistoryHead {
+		if err := history.Sync(); err != nil {
+			fatal("sync history", err)
+		}
 	}
 
 	return &cliContext{client: c, history: history}
 }
 
+func (ctx *cliContext) serverIndex() int {
+	history, err := ctx.client.History(ctx.history.ID)
+	if err != nil {
+		fatal("get server index", err)
+	}
+	return history.LatestServerIndex
+}
+
 func (ctx *cliContext) loadState() *memory.State {
-	var allItems []thingscloud.Item
+	cachePath := cliStateCachePath()
+	cache, err := loadCLIStateCache(cachePath)
+	if err != nil {
+		fatal("load state cache", err)
+	}
+
+	state := memory.NewState()
 	startIndex := 0
+	if cache != nil && cache.HistoryID == ctx.history.ID {
+		state = cache.State
+		startIndex = cache.ServerIndex
+	}
+
+	latestServerIndex := ctx.serverIndex()
+	if startIndex > latestServerIndex {
+		state = memory.NewState()
+		startIndex = 0
+	}
+
 	for {
+		if startIndex >= latestServerIndex {
+			break
+		}
+		ctx.history.LoadedServerIndex = startIndex
 		items, hasMore, err := ctx.history.Items(thingscloud.ItemsOptions{StartIndex: startIndex})
 		if err != nil {
 			fatal("fetch items", err)
 		}
-		allItems = append(allItems, items...)
+		if err := state.Update(items...); err != nil {
+			fatal("update state", err)
+		}
+		startIndex = ctx.history.LoadedServerIndex
 		if !hasMore {
 			break
 		}
-		startIndex = ctx.history.LoadedServerIndex
 	}
 
-	state := memory.NewState()
-	state.Update(allItems...)
+	if err := saveCLIStateCache(cachePath, &cliStateCache{
+		HistoryID:   ctx.history.ID,
+		ServerIndex: startIndex,
+		State:       state,
+	}); err != nil {
+		fatal("save state cache", err)
+	}
+
 	return state
 }
 
@@ -1184,12 +1295,15 @@ func buildBatchEdit(op BatchOp) (thingscloud.Identifiable, map[string]string, er
 func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage: things-cli <command> [args]
 
-Read commands (load state from cloud):
+Read commands (use an incremental local state cache):
   list [--today] [--inbox] [--area NAME] [--project NAME]
   show <uuid>
   areas
   projects
   tags
+
+Environment:
+  THINGS_CLI_CACHE=/path/to/things-cli-state.json  Override read-state cache file
 
 Write commands (fast — skip state loading):
   create "Title" [--note ...] [--when today|anytime|someday|inbox]
@@ -1231,8 +1345,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := initCLI()
 	cmd := os.Args[1]
+	ctx := initCLI(commandNeedsHistoryHead(cmd))
 
 	switch cmd {
 	// Read commands — need state
