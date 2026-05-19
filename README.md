@@ -155,19 +155,19 @@ export THINGS_CLI_CACHE=/path/to/things-cli-state.json
 things-cli create "Title" [--note ...] [--when today|anytime|someday|inbox] \
   [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] \
   [--project UUID] [--heading UUID] [--area UUID] \
-  [--tags UUID,...] [--type task|project|heading]
+  [--tags UUID,...] [--type task|project|heading] [--dry-run]
 things-cli create-area "Name"
 things-cli create-tag "Name" [--shorthand KEY] [--parent UUID]
 
 # Modify
-things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...]
-things-cli complete <uuid>
-things-cli trash <uuid>
-things-cli purge <uuid>
-things-cli move-to-today <uuid>
+things-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...] [--dry-run]
+things-cli complete <uuid> [--dry-run]
+things-cli trash <uuid> [--dry-run]
+things-cli purge <uuid> [--dry-run]
+things-cli move-to-today <uuid> [--dry-run]
 
 # Batch (all operations in one HTTP request - much faster!)
-echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch
+echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-cli batch [--dry-run]
 ```
 
 ### Examples
@@ -178,6 +178,9 @@ things-cli create "My Project" --type project --when anytime
 # → {"status":"created","uuid":"BXmAcvS6yK1eDhW31MuZrL","title":"My Project"}
 
 things-cli create "First Task" --project BXmAcvS6yK1eDhW31MuZrL --when today --note "Details here"
+
+# Preview the write payload without sending it to Things Cloud
+things-cli create "Draft from agent" --when today --dry-run
 
 # Create an area and assign tasks
 things-cli create-area "Work"
