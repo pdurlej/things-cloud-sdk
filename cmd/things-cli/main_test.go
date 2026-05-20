@@ -94,6 +94,31 @@ func TestStripBoolFlag(t *testing.T) {
 	}
 }
 
+func TestIsHelpInvocation(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "top-level long flag", args: []string{"--help"}, want: true},
+		{name: "top-level short flag", args: []string{"-h"}, want: true},
+		{name: "help command", args: []string{"help"}, want: true},
+		{name: "subcommand long flag", args: []string{"list", "--help"}, want: true},
+		{name: "subcommand short flag", args: []string{"create", "-h"}, want: true},
+		{name: "task title help", args: []string{"create", "help"}, want: false},
+		{name: "normal command", args: []string{"today"}, want: false},
+		{name: "empty", args: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHelpInvocation(tt.args); got != tt.want {
+				t.Fatalf("isHelpInvocation(%v) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildChecklistItemEnvelopes(t *testing.T) {
 	envelopes := buildChecklistItemEnvelopes("task-1", []string{"First", "Second"})
 	if len(envelopes) != 2 {
