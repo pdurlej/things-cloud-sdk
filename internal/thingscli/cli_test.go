@@ -1,4 +1,4 @@
-package main
+package thingscli
 
 import (
 	"encoding/json"
