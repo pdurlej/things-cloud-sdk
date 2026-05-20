@@ -105,20 +105,23 @@ go run main.go
 Install and use the command-line tool:
 
 ```bash
-# Install
+# Install the preferred CLI
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@latest
+
+# Or install the backward-compatible alias
 go install github.com/pdurlej/things-cloud-sdk/cmd/things-cli@latest
 
 # Create a task
-things-cli create "Buy groceries" --when today
+things-cloud-cli create "Buy groceries" --when today
 
 # List today's tasks
-things-cli list --today
+things-cloud-cli list --today
 
 # Compact task JSON for OpenClaw-style agents
-things-cli today --simple
+things-cloud-cli today --simple
 
 # Complete a task
-things-cli complete <task-uuid>
+things-cloud-cli complete <task-uuid>
 ```
 
 ## Features
