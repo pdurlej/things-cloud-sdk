@@ -228,6 +228,23 @@ func requireArgs(args []string, min int, usage string) {
 	}
 }
 
+func isHelpInvocation(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "help", "--help", "-h":
+		return true
+	}
+	for _, arg := range args[1:] {
+		switch arg {
+		case "--help", "-h":
+			return true
+		}
+	}
+	return false
+}
+
 func outputJSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -1578,6 +1595,11 @@ func main() {
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
+	}
+
+	if isHelpInvocation(os.Args[1:]) {
+		printUsage()
+		return
 	}
 
 	cmd := os.Args[1]
