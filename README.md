@@ -142,8 +142,14 @@ things-cloud-cli today --simple
 # Search active tasks.
 things-cloud-cli search "invoice" --simple
 
+# Read completed task evidence for sync feedback loops.
+things-cloud-cli completed --since 2026-05-20T00:00:00Z --format full
+
 # Preview a write payload before sending it.
 things-cloud-cli create "Draft from agent" --when today --dry-run
+
+# Preview a recurring task.
+things-cloud-cli create "Check car listings" --repeat every-day --dry-run
 
 # Complete a task.
 things-cloud-cli complete <task-uuid>
@@ -202,11 +208,17 @@ things-cloud-cli anytime [--simple|--format full|simple]
 things-cloud-cli someday [--simple|--format full|simple]
 things-cloud-cli upcoming [--simple|--format full|simple]
 things-cloud-cli search <query> [--simple|--format full|simple]
+things-cloud-cli completed [--since RFC3339|YYYY-MM-DD] [--until RFC3339|YYYY-MM-DD] [--limit N] [--simple|--format full|simple]
+things-cloud-cli logbook [--since RFC3339|YYYY-MM-DD] [--until RFC3339|YYYY-MM-DD] [--limit N] [--simple|--format full|simple]
 things-cloud-cli show <uuid> [--simple|--format full|simple]
 things-cloud-cli areas
 things-cloud-cli projects
 things-cloud-cli tags
 ```
+
+Normal list views hide completed tasks. Use `completed` or `logbook` when an
+agent needs explicit completion evidence instead of inferring completion from
+absence.
 
 Write commands:
 
@@ -215,24 +227,30 @@ things-cloud-cli create "Title" [--note ...] [--when today|anytime|someday|inbox
   [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] \
   [--project UUID] [--heading UUID] [--area UUID] \
   [--tags UUID,...] [--type task|project|heading] [--uuid UUID] \
-  [--checklist "Item 1,Item 2,..."] [--dry-run]
+  [--checklist "Item 1,Item 2,..."] [--repeat SPEC] [--repeat-start YYYY-MM-DD] [--dry-run]
 
 things-cloud-cli create-area "Name" [--tags UUID,...] [--uuid UUID] [--dry-run]
 things-cloud-cli create-tag "Name" [--shorthand KEY] [--parent UUID] [--dry-run]
 things-cloud-cli add-checklist <task-uuid> "Item 1,Item 2,Item 3" [--dry-run]
-things-cloud-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...] [--scheduled ...] [--area UUID] [--project UUID] [--heading UUID] [--tags UUID,...] [--dry-run]
+things-cloud-cli edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...] [--scheduled ...] [--area UUID] [--project UUID] [--heading UUID] [--tags UUID,...] [--repeat SPEC|none] [--repeat-start YYYY-MM-DD] [--dry-run]
 things-cloud-cli complete <uuid> [--dry-run]
 things-cloud-cli trash <uuid> [--dry-run]
 things-cloud-cli purge <uuid> [--dry-run]
 things-cloud-cli move-to-today <uuid> [--dry-run]
 ```
 
+Supported repeat specs: `every-day`, `daily`, `weekly`, `every-week`,
+`weekly:mon,wed`, `after-completion:every-day`,
+`after-completion:weekly:mon`, and `none`/`off`/`clear` for edit. Monthly,
+yearly, and custom end conditions are intentionally not exposed through the CLI
+yet.
+
 Batch writes:
 
 ```bash
 echo '[
-  {"cmd": "create", "title": "Task 1", "when": "today"},
-  {"cmd": "create", "title": "Task 2", "when": "anytime"},
+  {"cmd": "create", "title": "Task 1", "when": "today", "repeat": "every-day"},
+  {"cmd": "create", "title": "Task 2", "repeat": "weekly:mon,wed", "repeatStart": "2026-05-20"},
   {"cmd": "move-to-project", "uuid": "task-uuid", "project": "project-uuid"},
   {"cmd": "complete", "uuid": "done-task-uuid"}
 ]' | things-cloud-cli batch --dry-run
@@ -500,8 +518,8 @@ func main() {
 - Event-sourced item reads and writes for tasks, projects, headings, areas,
   tags, checklist items, and tombstones.
 - CLI read views: Inbox, Today, Anytime, Someday, Upcoming, search, projects,
-  areas, tags.
-- CLI write commands with `--dry-run` and batch write support.
+  areas, tags, completed/logbook evidence.
+- CLI write commands with `--dry-run`, repeat specs, and batch write support.
 - MCP stdio server for agent integrations.
 - Persistent SQLite sync engine with typed semantic changes.
 - Read-only local SQLite reader for macOS Things databases.

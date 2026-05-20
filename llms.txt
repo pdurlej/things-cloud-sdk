@@ -32,8 +32,11 @@ Best entry points for LLMs:
 Recommended interface by task:
 
 - List/search tasks: `things-cloud-cli today --simple`, `things-cloud-cli search <query> --simple`, or MCP `list_tasks`/`search_tasks`.
+- Completion evidence: `things-cloud-cli completed --since <RFC3339> --format full` or `things-cloud-cli logbook --since <date> --format full`. Do not infer completion from absence in normal list views.
 - Create/update tasks from an agent: use MCP tools or CLI write commands with
   `--dry-run` first.
+- Recurring tasks: use CLI `--repeat every-day`, `--repeat weekly:mon,wed`, or
+  `--repeat after-completion:every-day`; dry-run first.
 - Long-running service: use `sync.Open(...).Sync()` or `QuickSync()`.
 - Local macOS inspection: use `local.OpenDefault()` read-only. Never write local
   SQLite.

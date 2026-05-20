@@ -43,9 +43,9 @@ type RepeaterConfiguration struct {
 	FrequencyAmplitude  int64                         `json:"fa"`
 	DetailConfiguration []RepeaterDetailConfiguration `json:"of"`
 	LastScheduledAt     *Timestamp                    `json:"ed,omitempty"`
-	Version             int                           `json:"rrv,omitempty"`
-	Type                int                           `json:"tp,omitempty"`
-	TimeShift           int                           `json:"ts,omitempty"`
+	Version             int                           `json:"rrv"`
+	Type                int                           `json:"tp"`
+	TimeShift           int                           `json:"ts"`
 	StartReference      *Timestamp                    `json:"sr,omitempty"`
 }
 

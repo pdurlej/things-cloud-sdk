@@ -97,7 +97,7 @@ func (t *Timestamp) UnmarshalJSON(bs []byte) error {
 // matching the format used by the Things Cloud API (e.g. 1770713623.4716659).
 func (t *Timestamp) MarshalJSON() ([]byte, error) {
 	tt := time.Time(*t)
-	ts := float64(tt.UnixNano()) / 1e9
+	ts := float64(tt.Unix()) + float64(tt.Nanosecond())/1e9
 	return json.Marshal(ts)
 }
 

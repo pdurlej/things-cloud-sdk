@@ -288,6 +288,113 @@ func TestBatchEditExplicitWhenWinsOverAutoAnytime(t *testing.T) {
 	}
 }
 
+func TestCreatePayloadWithDailyRepeatDefaultsToScheduledToday(t *testing.T) {
+	payload, err := newTaskCreatePayloadWithRepeat("Repeat task", map[string]string{"repeat": "every-day"})
+	if err != nil {
+		t.Fatalf("newTaskCreatePayloadWithRepeat failed: %v", err)
+	}
+	if payload.Rr == nil {
+		t.Fatal("repeat payload was not set")
+	}
+	if payload.St != 1 {
+		t.Fatalf("St = %d, want 1", payload.St)
+	}
+	if payload.Sr == nil || payload.Tir == nil {
+		t.Fatalf("Sr/Tir = %v/%v, want scheduled first repeat date", payload.Sr, payload.Tir)
+	}
+
+	var repeat thingscloud.RepeaterConfiguration
+	if err := json.Unmarshal(*payload.Rr, &repeat); err != nil {
+		t.Fatalf("unmarshal repeat failed: %v", err)
+	}
+	if repeat.FrequencyUnit != thingscloud.FrequencyUnitDaily {
+		t.Fatalf("FrequencyUnit = %d, want daily", repeat.FrequencyUnit)
+	}
+	if repeat.Type != int(thingscloud.RepeaterTypeScheduled) {
+		t.Fatalf("Type = %d, want scheduled", repeat.Type)
+	}
+}
+
+func TestCreatePayloadWithWeeklyAfterCompletionRepeat(t *testing.T) {
+	payload, err := newTaskCreatePayloadWithRepeat("Repeat task", map[string]string{
+		"repeat":       "after-completion:weekly:mon,wed",
+		"repeat-start": "2026-05-20",
+	})
+	if err != nil {
+		t.Fatalf("newTaskCreatePayloadWithRepeat failed: %v", err)
+	}
+
+	var repeat thingscloud.RepeaterConfiguration
+	if err := json.Unmarshal(*payload.Rr, &repeat); err != nil {
+		t.Fatalf("unmarshal repeat failed: %v", err)
+	}
+	if repeat.Type != int(thingscloud.RepeaterTypeAfterCompletion) {
+		t.Fatalf("Type = %d, want after-completion", repeat.Type)
+	}
+	if repeat.FrequencyUnit != thingscloud.FrequencyUnitWeekly {
+		t.Fatalf("FrequencyUnit = %d, want weekly", repeat.FrequencyUnit)
+	}
+	if len(repeat.DetailConfiguration) != 2 {
+		t.Fatalf("len(DetailConfiguration) = %d, want 2", len(repeat.DetailConfiguration))
+	}
+	if repeat.FirstScheduledAt == nil || repeat.FirstScheduledAt.Format("2006-01-02") != "2026-05-20" {
+		t.Fatalf("FirstScheduledAt = %v, want 2026-05-20", repeat.FirstScheduledAt)
+	}
+}
+
+func TestBatchCreateSupportsRepeat(t *testing.T) {
+	env, _, err := buildBatchCreate(BatchOp{
+		Title:  "Repeat task",
+		Repeat: "weekly:mon",
+	})
+	if err != nil {
+		t.Fatalf("buildBatchCreate failed: %v", err)
+	}
+
+	var wire struct {
+		P struct {
+			Rr json.RawMessage `json:"rr"`
+		} `json:"p"`
+	}
+	bs, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	if err := json.Unmarshal(bs, &wire); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if len(wire.P.Rr) == 0 || string(wire.P.Rr) == "null" {
+		t.Fatalf("repeat payload = %s, want object", wire.P.Rr)
+	}
+}
+
+func TestBatchEditCanClearRepeat(t *testing.T) {
+	env, _, err := buildBatchEdit(BatchOp{
+		UUID:   "task-1",
+		Repeat: "none",
+	})
+	if err != nil {
+		t.Fatalf("buildBatchEdit failed: %v", err)
+	}
+	payload := requirePayloadMap(t, env)
+	if _, ok := payload["rr"]; !ok {
+		t.Fatal("rr field was not set")
+	}
+	bs, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	var wire struct {
+		P map[string]any `json:"p"`
+	}
+	if err := json.Unmarshal(bs, &wire); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if wire.P["rr"] != nil {
+		t.Fatalf("wire rr = %v, want null", wire.P["rr"])
+	}
+}
+
 func TestCommandNeedsHistoryHead(t *testing.T) {
 	tests := []struct {
 		cmd  string
@@ -304,6 +411,8 @@ func TestCommandNeedsHistoryHead(t *testing.T) {
 		{"someday", false},
 		{"upcoming", false},
 		{"search", false},
+		{"completed", false},
+		{"logbook", false},
 		{"create", true},
 		{"edit", true},
 		{"complete", true},
@@ -529,4 +638,47 @@ func TestListTasksSearchAndContainerFilters(t *testing.T) {
 	requireUUIDs(t, listTasks(state, map[string]string{"search": "project"}), "project-task-1")
 	requireUUIDs(t, listTasks(state, map[string]string{"area": "Work"}), "area-task-1")
 	requireUUIDs(t, listTasks(state, map[string]string{"project": "Project Alpha"}), "project-task-1")
+}
+
+func TestCompletedTasksIncludeCompletionEvidenceAndMetadata(t *testing.T) {
+	state := testStateForListFilters()
+	completedAt := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	modifiedAt := completedAt.Add(5 * time.Minute)
+	state.Tasks["completed-1"].CompletionDate = &completedAt
+	state.Tasks["completed-1"].ModificationDate = &modifiedAt
+	state.Tasks["completed-1"].AreaIDs = []string{"area-1"}
+	state.Tasks["completed-1"].ParentTaskIDs = []string{"project-1"}
+	state.Tasks["completed-1"].TagIDs = []string{"tag-1"}
+
+	got := completedTasks(state, map[string]string{"since": "2026-05-20T00:00:00Z"})
+	if len(got) != 1 {
+		t.Fatalf("len(completed) = %d, want 1: %#v", len(got), got)
+	}
+	task := got[0]
+	if task.UUID != "completed-1" {
+		t.Fatalf("UUID = %q, want completed-1", task.UUID)
+	}
+	if task.CompletedAt == nil || *task.CompletedAt != "2026-05-20T12:00:00Z" {
+		t.Fatalf("CompletedAt = %v, want 2026-05-20T12:00:00Z", task.CompletedAt)
+	}
+	if len(task.AreaTitles) != 1 || task.AreaTitles[0] != "Work" {
+		t.Fatalf("AreaTitles = %v, want [Work]", task.AreaTitles)
+	}
+	if len(task.ProjectTitles) != 1 || task.ProjectTitles[0] != "Project Alpha" {
+		t.Fatalf("ProjectTitles = %v, want [Project Alpha]", task.ProjectTitles)
+	}
+	if len(task.TagIDs) != 1 || task.TagIDs[0] != "tag-1" {
+		t.Fatalf("TagIDs = %v, want [tag-1]", task.TagIDs)
+	}
+}
+
+func TestCompletedTasksSinceFiltersByCompletionTime(t *testing.T) {
+	state := testStateForListFilters()
+	completedAt := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
+	state.Tasks["completed-1"].CompletionDate = &completedAt
+
+	got := completedTasks(state, map[string]string{"since": "2026-05-20T00:00:00Z"})
+	if len(got) != 0 {
+		t.Fatalf("len(completed) = %d, want 0: %#v", len(got), got)
+	}
 }
