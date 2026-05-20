@@ -16,6 +16,17 @@ var (
 	FrequencyUnitYearly FrequencyUnit = 4
 )
 
+// RepeaterType describes whether a repeating task is scheduled from its
+// scheduled date or after the previous completion.
+type RepeaterType int
+
+const (
+	// RepeaterTypeScheduled repeats from the scheduled date.
+	RepeaterTypeScheduled RepeaterType = 0
+	// RepeaterTypeAfterCompletion repeats after the task is completed.
+	RepeaterTypeAfterCompletion RepeaterType = 1
+)
+
 // RepeaterDetailConfiguration configures specifics of a repeater configuration.
 type RepeaterDetailConfiguration struct {
 	Day     *int64        `json:"dy,omitempty"`
@@ -38,9 +49,37 @@ type RepeaterConfiguration struct {
 	StartReference      *Timestamp                    `json:"sr,omitempty"`
 }
 
+// IsAfterCompletion reports whether the rule repeats after completion.
+func (c RepeaterConfiguration) IsAfterCompletion() bool {
+	return RepeaterType(c.Type) == RepeaterTypeAfterCompletion
+}
+
 // IsNeverending determines if a recurring rule has a specific end
 func (c RepeaterConfiguration) IsNeverending() bool {
 	return c.LastScheduledAt != nil && c.LastScheduledAt.Time().Year() == 4001
+}
+
+// NewRepeatAfterCompletion creates a basic repeat-after-completion rule.
+// Callers can customize DetailConfiguration and end conditions before writing.
+func NewRepeatAfterCompletion(unit FrequencyUnit, amplitude int64, start time.Time) RepeaterConfiguration {
+	startTS := Timestamp(start)
+	never := Timestamp(time.Date(4001, 1, 1, 0, 0, 0, 0, time.UTC))
+	return RepeaterConfiguration{
+		FirstScheduledAt:    &startTS,
+		RepeatCount:         int64Ptr(0),
+		FrequencyUnit:       unit,
+		FrequencyAmplitude:  amplitude,
+		DetailConfiguration: []RepeaterDetailConfiguration{{}},
+		LastScheduledAt:     &never,
+		Version:             4,
+		Type:                int(RepeaterTypeAfterCompletion),
+		TimeShift:           0,
+		StartReference:      &startTS,
+	}
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func (c RepeaterConfiguration) nextScheduledAt(repeat int, dcF func(time.Time, RepeaterDetailConfiguration) time.Time, aF func(time.Time) time.Time) time.Time {

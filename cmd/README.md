@@ -12,6 +12,7 @@ Or create `~/.things-cloud.json`:
 {
   "username": "your@email.com",
   "password": "yourpassword",
+  "token": "optional-password-alias",
   "cache": "/path/to/things-cli-state.json"
 }
 ```
@@ -20,13 +21,13 @@ Set `THINGS_CONFIG=/path/to/config.json` to use a different file. Environment va
 
 ## Production Tools
 
-### things-cli
+### things-cloud-cli / things-cli
 
-Full-featured CLI for CRUD operations on Things Cloud.
+Full-featured CLI for CRUD operations on Things Cloud. Prefer `things-cloud-cli` for new installs; `things-cli` remains available for compatibility.
 
 ```bash
 # Read operations (uses an incremental local state cache)
-things-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
+things-cloud-cli list [--today] [--inbox] [--anytime] [--someday] [--upcoming] [--search QUERY] [--area NAME] [--project NAME] [--simple|--format full|simple]
 things-cli today [--simple]
 things-cli inbox [--simple]
 things-cli anytime [--simple]
@@ -76,7 +77,7 @@ echo '[
 
 ### things-mcp
 
-Stdio MCP server for agent integrations. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes `list_tasks`, `search_tasks`, `create_task`, and `complete_task`.
+Stdio MCP server for agent integrations. It uses `THINGS_USERNAME` and `THINGS_PASSWORD` from the environment and exposes `list_tasks`, `search_tasks`, `list_projects`, `list_areas`, `list_tags`, `create_task`, `complete_task`, `edit_task`, `trash_task`, `move_task_to_today`, and `add_checklist`.
 
 ```bash
 go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest

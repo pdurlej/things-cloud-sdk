@@ -213,6 +213,95 @@ func tools() []toolDefinition {
 				},
 			}, []string{"uuid"}),
 		},
+		{
+			Name:        "edit_task",
+			Title:       "Edit Task",
+			Description: "Edit task title, note, or schedule bucket.",
+			InputSchema: objectSchema(map[string]any{
+				"uuid":    stringProp("Task UUID."),
+				"title":   stringProp("New task title."),
+				"note":    stringProp("New task note."),
+				"when":    enumProp("Schedule bucket.", []string{"inbox", "today", "anytime", "someday"}),
+				"dry_run": dryRunProp(),
+			}, []string{"uuid"}),
+		},
+		{
+			Name:        "trash_task",
+			Title:       "Trash Task",
+			Description: "Move a task to trash.",
+			InputSchema: objectSchema(map[string]any{
+				"uuid":    stringProp("Task UUID."),
+				"dry_run": dryRunProp(),
+			}, []string{"uuid"}),
+		},
+		{
+			Name:        "move_task_to_today",
+			Title:       "Move Task To Today",
+			Description: "Schedule a task for Today.",
+			InputSchema: objectSchema(map[string]any{
+				"uuid":    stringProp("Task UUID."),
+				"dry_run": dryRunProp(),
+			}, []string{"uuid"}),
+		},
+		{
+			Name:        "add_checklist",
+			Title:       "Add Checklist Items",
+			Description: "Add checklist items to a task.",
+			InputSchema: objectSchema(map[string]any{
+				"uuid": stringProp("Task UUID."),
+				"items": map[string]any{
+					"type":        "array",
+					"description": "Checklist item titles.",
+					"items":       map[string]any{"type": "string"},
+				},
+				"dry_run": dryRunProp(),
+			}, []string{"uuid", "items"}),
+		},
+		{
+			Name:        "list_projects",
+			Title:       "List Projects",
+			Description: "List active Things projects.",
+			InputSchema: objectSchema(map[string]any{
+				"limit": limitProp(),
+			}, nil),
+		},
+		{
+			Name:        "list_areas",
+			Title:       "List Areas",
+			Description: "List Things areas.",
+			InputSchema: objectSchema(map[string]any{
+				"limit": limitProp(),
+			}, nil),
+		},
+		{
+			Name:        "list_tags",
+			Title:       "List Tags",
+			Description: "List Things tags.",
+			InputSchema: objectSchema(map[string]any{
+				"limit": limitProp(),
+			}, nil),
+		},
+	}
+}
+
+func stringProp(description string) map[string]any {
+	return map[string]any{"type": "string", "description": description}
+}
+
+func enumProp(description string, values []string) map[string]any {
+	return map[string]any{"type": "string", "description": description, "enum": values}
+}
+
+func dryRunProp() map[string]any {
+	return map[string]any{"type": "boolean", "description": "Build and return the payload without writing to Things Cloud."}
+}
+
+func limitProp() map[string]any {
+	return map[string]any{
+		"type":        "integer",
+		"description": "Maximum number of entries to return.",
+		"minimum":     1,
+		"maximum":     200,
 	}
 }
 
@@ -281,6 +370,70 @@ func (s *mcpServer) callTool(raw json.RawMessage) (toolResult, error) {
 			return toolResult{}, err
 		}
 		return s.completeTask(args.UUID, args.DryRun)
+	case "edit_task":
+		var args struct {
+			UUID   string `json:"uuid"`
+			Title  string `json:"title"`
+			Note   string `json:"note"`
+			When   string `json:"when"`
+			DryRun bool   `json:"dry_run"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.editTask(args.UUID, args.Title, args.Note, args.When, args.DryRun)
+	case "trash_task":
+		var args struct {
+			UUID   string `json:"uuid"`
+			DryRun bool   `json:"dry_run"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.trashTask(args.UUID, args.DryRun)
+	case "move_task_to_today":
+		var args struct {
+			UUID   string `json:"uuid"`
+			DryRun bool   `json:"dry_run"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.moveTaskToToday(args.UUID, args.DryRun)
+	case "add_checklist":
+		var args struct {
+			UUID   string   `json:"uuid"`
+			Items  []string `json:"items"`
+			DryRun bool     `json:"dry_run"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.addChecklist(args.UUID, args.Items, args.DryRun)
+	case "list_projects":
+		var args struct {
+			Limit int `json:"limit"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.listProjects(args.Limit)
+	case "list_areas":
+		var args struct {
+			Limit int `json:"limit"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.listAreas(args.Limit)
+	case "list_tags":
+		var args struct {
+			Limit int `json:"limit"`
+		}
+		if err := decodeArgs(params.Arguments, &args); err != nil {
+			return toolResult{}, err
+		}
+		return s.listTags(args.Limit)
 	default:
 		return toolResult{}, fmt.Errorf("unknown tool: %s", params.Name)
 	}
@@ -392,6 +545,95 @@ func (s *mcpServer) listTasks(view, query string, limit int) (toolResult, error)
 		tasks = tasks[:limit]
 	}
 	return toolJSON(tasks), nil
+}
+
+type simpleProject struct {
+	UUID   string `json:"uuid"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
+type simpleArea struct {
+	UUID  string `json:"uuid"`
+	Title string `json:"title"`
+}
+
+type simpleTag struct {
+	UUID      string   `json:"uuid"`
+	Title     string   `json:"title"`
+	Shorthand string   `json:"shorthand,omitempty"`
+	ParentIDs []string `json:"parentIds,omitempty"`
+}
+
+func (s *mcpServer) listProjects(limit int) (toolResult, error) {
+	state, err := s.loadState()
+	if err != nil {
+		return toolError(err), nil
+	}
+	var projects []simpleProject
+	for _, task := range state.Tasks {
+		if task.Type != thingscloud.TaskTypeProject || task.InTrash || task.Status == thingscloud.TaskStatusCompleted {
+			continue
+		}
+		projects = append(projects, simpleProject{UUID: task.UUID, Title: task.Title, Status: taskStatus(task)})
+	}
+	sort.Slice(projects, func(i, j int) bool {
+		if projects[i].Title != projects[j].Title {
+			return projects[i].Title < projects[j].Title
+		}
+		return projects[i].UUID < projects[j].UUID
+	})
+	if limit > 0 && limit < len(projects) {
+		projects = projects[:limit]
+	}
+	return toolJSON(projects), nil
+}
+
+func (s *mcpServer) listAreas(limit int) (toolResult, error) {
+	state, err := s.loadState()
+	if err != nil {
+		return toolError(err), nil
+	}
+	var areas []simpleArea
+	for _, area := range state.Areas {
+		areas = append(areas, simpleArea{UUID: area.UUID, Title: area.Title})
+	}
+	sort.Slice(areas, func(i, j int) bool {
+		if areas[i].Title != areas[j].Title {
+			return areas[i].Title < areas[j].Title
+		}
+		return areas[i].UUID < areas[j].UUID
+	})
+	if limit > 0 && limit < len(areas) {
+		areas = areas[:limit]
+	}
+	return toolJSON(areas), nil
+}
+
+func (s *mcpServer) listTags(limit int) (toolResult, error) {
+	state, err := s.loadState()
+	if err != nil {
+		return toolError(err), nil
+	}
+	var tags []simpleTag
+	for _, tag := range state.Tags {
+		tags = append(tags, simpleTag{
+			UUID:      tag.UUID,
+			Title:     tag.Title,
+			Shorthand: tag.ShortHand,
+			ParentIDs: tag.ParentTagIDs,
+		})
+	}
+	sort.Slice(tags, func(i, j int) bool {
+		if tags[i].Title != tags[j].Title {
+			return tags[i].Title < tags[j].Title
+		}
+		return tags[i].UUID < tags[j].UUID
+	})
+	if limit > 0 && limit < len(tags) {
+		tags = tags[:limit]
+	}
+	return toolJSON(tags), nil
 }
 
 func matchesView(task *thingscloud.Task, view string, now, tomorrowStart time.Time) bool {
@@ -513,6 +755,125 @@ func (s *mcpServer) completeTask(taskUUID string, dryRun bool) (toolResult, erro
 	return toolJSON(map[string]string{"status": "completed", "uuid": taskUUID}), nil
 }
 
+func (s *mcpServer) editTask(taskUUID, title, note, when string, dryRun bool) (toolResult, error) {
+	taskUUID = strings.TrimSpace(taskUUID)
+	if taskUUID == "" {
+		return toolResult{}, fmt.Errorf("uuid is required")
+	}
+	payload := map[string]any{"md": nowTs()}
+	if strings.TrimSpace(title) != "" {
+		payload["tt"] = strings.TrimSpace(title)
+	}
+	if note != "" {
+		payload["nt"] = textNote(note)
+	}
+	if when != "" {
+		if err := applyWhen(payload, when); err != nil {
+			return toolResult{}, err
+		}
+	}
+	if len(payload) == 1 {
+		return toolResult{}, fmt.Errorf("at least one of title, note, or when is required")
+	}
+	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: payload}
+	if dryRun {
+		return toolJSON(map[string]any{"status": "dry-run", "uuid": taskUUID, "item": env}), nil
+	}
+	if err := s.write(env); err != nil {
+		return toolError(err), nil
+	}
+	return toolJSON(map[string]string{"status": "updated", "uuid": taskUUID}), nil
+}
+
+func (s *mcpServer) trashTask(taskUUID string, dryRun bool) (toolResult, error) {
+	return s.writeTaskUpdate(taskUUID, map[string]any{"md": nowTs(), "tr": true}, dryRun, "trashed")
+}
+
+func (s *mcpServer) moveTaskToToday(taskUUID string, dryRun bool) (toolResult, error) {
+	payload := map[string]any{"md": nowTs()}
+	if err := applyWhen(payload, "today"); err != nil {
+		return toolResult{}, err
+	}
+	return s.writeTaskUpdate(taskUUID, payload, dryRun, "moved-to-today")
+}
+
+func (s *mcpServer) writeTaskUpdate(taskUUID string, payload map[string]any, dryRun bool, status string) (toolResult, error) {
+	taskUUID = strings.TrimSpace(taskUUID)
+	if taskUUID == "" {
+		return toolResult{}, fmt.Errorf("uuid is required")
+	}
+	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: payload}
+	if dryRun {
+		return toolJSON(map[string]any{"status": "dry-run", "uuid": taskUUID, "item": env}), nil
+	}
+	if err := s.write(env); err != nil {
+		return toolError(err), nil
+	}
+	return toolJSON(map[string]string{"status": status, "uuid": taskUUID}), nil
+}
+
+func (s *mcpServer) addChecklist(taskUUID string, titles []string, dryRun bool) (toolResult, error) {
+	taskUUID = strings.TrimSpace(taskUUID)
+	if taskUUID == "" {
+		return toolResult{}, fmt.Errorf("uuid is required")
+	}
+	var envelopes []thingscloud.Identifiable
+	now := nowTs()
+	for i, title := range titles {
+		title = strings.TrimSpace(title)
+		if title == "" {
+			continue
+		}
+		payload := checklistItemCreatePayload{
+			Cd: now,
+			Md: nil,
+			Tt: title,
+			Ss: 0,
+			Sp: nil,
+			Ix: i,
+			Ts: []string{taskUUID},
+			Lt: false,
+			Xx: wireExtension{Sn: map[string]any{}, TypeTag: "oo"},
+		}
+		envelopes = append(envelopes, writeEnvelope{id: generateUUID(), action: 0, kind: "ChecklistItem3", payload: payload})
+	}
+	if len(envelopes) == 0 {
+		return toolResult{}, fmt.Errorf("at least one checklist item is required")
+	}
+	if dryRun {
+		return toolJSON(map[string]any{"status": "dry-run", "uuid": taskUUID, "items": envelopes}), nil
+	}
+	if err := s.write(envelopes...); err != nil {
+		return toolError(err), nil
+	}
+	return toolJSON(map[string]any{"status": "checklist-added", "uuid": taskUUID, "items": len(envelopes)}), nil
+}
+
+func applyWhen(payload map[string]any, when string) error {
+	switch when {
+	case "inbox":
+		payload["st"] = 0
+		payload["sr"] = nil
+		payload["tir"] = nil
+	case "today":
+		today := todayMidnightUTC()
+		payload["st"] = 1
+		payload["sr"] = today
+		payload["tir"] = today
+	case "anytime":
+		payload["st"] = 1
+		payload["sr"] = nil
+		payload["tir"] = nil
+	case "someday":
+		payload["st"] = 2
+		payload["sr"] = nil
+		payload["tir"] = nil
+	default:
+		return fmt.Errorf("unknown when value: %s", when)
+	}
+	return nil
+}
+
 func (s *mcpServer) write(items ...thingscloud.Identifiable) error {
 	if err := s.ensureCloud(); err != nil {
 		return err
@@ -588,6 +949,18 @@ type taskCreatePayload struct {
 	Sb   int              `json:"sb"`
 	Rr   *json.RawMessage `json:"rr"`
 	Xx   wireExtension    `json:"xx"`
+}
+
+type checklistItemCreatePayload struct {
+	Cd float64       `json:"cd"`
+	Md *float64      `json:"md"`
+	Tt string        `json:"tt"`
+	Ss int           `json:"ss"`
+	Sp *float64      `json:"sp"`
+	Ix int           `json:"ix"`
+	Ts []string      `json:"ts"`
+	Lt bool          `json:"lt"`
+	Xx wireExtension `json:"xx"`
 }
 
 type writeEnvelope struct {

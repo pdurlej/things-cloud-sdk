@@ -40,6 +40,7 @@ Or use a config file:
 {
   "username": "your@email.com",
   "password": "yourpassword",
+  "token": "optional-password-alias",
   "cache": "/path/to/things-cli-state.json"
 }
 ```
@@ -137,7 +138,7 @@ things-cli complete <task-uuid>
 
 ## CLI
 
-`things-cli` is a command-line tool for interacting with Things Cloud directly.
+`things-cloud-cli` is the preferred command-line tool for interacting with Things Cloud directly. `things-cli` remains available as a backward-compatible alias.
 `things-mcp` exposes a small stdio MCP server for agent integrations.
 
 ### Setup
@@ -146,6 +147,7 @@ things-cli complete <task-uuid>
 export THINGS_USERNAME='your@email.com'
 export THINGS_PASSWORD='yourpassword'
 go build -o things-cli ./cmd/things-cli/
+go build -o things-cloud-cli ./cmd/things-cloud-cli/
 go build -o things-mcp ./cmd/things-mcp/
 ```
 
@@ -155,6 +157,7 @@ You can also put credentials in `~/.things-cloud.json`:
 {
   "username": "your@email.com",
   "password": "yourpassword",
+  "token": "optional-password-alias",
   "cache": "/path/to/things-cli-state.json"
 }
 ```
@@ -203,8 +206,15 @@ echo '[{"cmd":"complete","uuid":"abc"},{"cmd":"trash","uuid":"def"}]' | things-c
 
 - `list_tasks`
 - `search_tasks`
+- `list_projects`
+- `list_areas`
+- `list_tags`
 - `create_task`
 - `complete_task`
+- `edit_task`
+- `trash_task`
+- `move_task_to_today`
+- `add_checklist`
 
 ```bash
 go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
@@ -323,6 +333,8 @@ func main() {
 
     // Fetch changes since last sync
     changes, _ := syncer.Sync()
+    // Or skip the server-index preflight when a local sync DB already exists:
+    // changes, _ := syncer.QuickSync()
 
     for _, c := range changes {
         switch v := c.(type) {
@@ -400,6 +412,19 @@ changes, _ := syncer.ChangesForEntity(taskUUID)
 changes, _ := syncer.ChangesSinceIndex(150)
 ```
 
+## Local SQLite Reader
+
+The `local` package provides a read-only adapter for local Things SQLite databases. This is separate from cloud writes and is intended for fast local inspection on macOS setups that already grant database access.
+
+```go
+reader, _ := local.OpenDefault()
+defer reader.Close()
+
+tasks, _ := reader.Tasks(context.Background(), local.Query{
+    Search: "invoice",
+})
+```
+
 ## Wire Format Notes
 
 Key findings from reverse engineering the Things Cloud sync protocol:
@@ -420,7 +445,7 @@ The SDK models all changes as immutable Items (events). A History is a sync stre
 
 ## TODO
 
-- [ ] Repeat after completion
+- [x] Repeat after completion metadata helpers
 - [x] Persistent state storage (see `sync` package)
 
 ## Note

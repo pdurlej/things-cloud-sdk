@@ -31,6 +31,10 @@ type Syncer struct {
 	history *things.History
 }
 
+type syncOptions struct {
+	skipServerIndexCheck bool
+}
+
 // Open creates or opens a sync database and connects to Things Cloud
 func Open(dbPath string, client *things.Client) (*Syncer, error) {
 	db, err := sql.Open("sqlite", dbPath)
@@ -78,6 +82,17 @@ func isRetryableError(err error) bool {
 // Sync fetches new items from Things Cloud, updates local state,
 // and returns the list of changes in order
 func (s *Syncer) Sync() ([]Change, error) {
+	return s.syncWithOptions(syncOptions{})
+}
+
+// QuickSync fetches deltas from the persisted cursor without first querying
+// the latest server index. It is useful for short-lived agents that already
+// have a sync database and want the fewest cloud round trips.
+func (s *Syncer) QuickSync() ([]Change, error) {
+	return s.syncWithOptions(syncOptions{skipServerIndexCheck: true})
+}
+
+func (s *Syncer) syncWithOptions(opts syncOptions) ([]Change, error) {
 	// Get current sync state first
 	storedHistoryID, startIndex, err := s.getSyncState()
 	if err != nil {
@@ -116,16 +131,18 @@ func (s *Syncer) Sync() ([]Change, error) {
 		startIndex = 0
 	}
 
-	// Pre-check: Get latest server index to avoid out-of-bounds requests
-	// A 500 error occurs when start-index > server's current-item-index
-	serverIndex, err := s.getServerIndex()
-	if err != nil {
-		return nil, err
-	}
+	if !opts.skipServerIndexCheck {
+		// Pre-check: Get latest server index to avoid out-of-bounds requests
+		// A 500 error occurs when start-index > server's current-item-index
+		serverIndex, err := s.getServerIndex()
+		if err != nil {
+			return nil, err
+		}
 
-	// If our cursor is already at or beyond the server's index, nothing to fetch
-	if startIndex >= serverIndex {
-		return nil, nil
+		// If our cursor is already at or beyond the server's index, nothing to fetch
+		if startIndex >= serverIndex {
+			return nil, nil
+		}
 	}
 
 	// Fetch items from server
@@ -255,13 +272,11 @@ func (s *Syncer) scanChangeLog(rows *sql.Rows) ([]Change, error) {
 			rawPayload = payload.String
 		}
 
-		changes = append(changes, LoggedChange{
-			baseChange: base,
-			changeType: changeType,
-			entityType: entityType,
-			entityUUID: entityUUID,
-			payload:    rawPayload,
-		})
+		change, err := s.rehydrateLoggedChange(base, changeType, entityType, entityUUID, rawPayload)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, change)
 	}
 
 	if err := rows.Err(); err != nil {

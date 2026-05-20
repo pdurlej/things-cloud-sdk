@@ -35,7 +35,19 @@ func TestToolsListIncludesCoreTools(t *testing.T) {
 			t.Fatalf("%s input schema type = %v, want object", tool.Name, tool.InputSchema["type"])
 		}
 	}
-	for _, name := range []string{"list_tasks", "search_tasks", "create_task", "complete_task"} {
+	for _, name := range []string{
+		"list_tasks",
+		"search_tasks",
+		"create_task",
+		"complete_task",
+		"edit_task",
+		"trash_task",
+		"move_task_to_today",
+		"add_checklist",
+		"list_projects",
+		"list_areas",
+		"list_tags",
+	} {
 		if !names[name] {
 			t.Fatalf("missing tool %s", name)
 		}
@@ -92,5 +104,63 @@ func TestCompleteTaskDryRunDoesNotRequireCloud(t *testing.T) {
 	}
 	if payload.Status != "dry-run" || payload.UUID != "task-1" {
 		t.Fatalf("payload = %#v, want dry-run for task-1", payload)
+	}
+}
+
+func TestEditTaskDryRunDoesNotRequireCloud(t *testing.T) {
+	server := &mcpServer{}
+	result, err := server.editTask("task-1", "New title", "new note", "anytime", true)
+	if err != nil {
+		t.Fatalf("editTask dry-run failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("dry-run returned tool error: %#v", result)
+	}
+	var payload struct {
+		Status string `json:"status"`
+		UUID   string `json:"uuid"`
+		Item   struct {
+			E string `json:"e"`
+			P struct {
+				Title string `json:"tt"`
+				St    int    `json:"st"`
+			} `json:"p"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
+		t.Fatalf("unmarshal dry-run content failed: %v", err)
+	}
+	if payload.Status != "dry-run" || payload.UUID != "task-1" {
+		t.Fatalf("payload = %#v, want dry-run for task-1", payload)
+	}
+	if payload.Item.E != "Task6" || payload.Item.P.Title != "New title" || payload.Item.P.St != 1 {
+		t.Fatalf("item payload = %#v, want Task6 title and anytime schedule", payload.Item)
+	}
+}
+
+func TestAddChecklistDryRunDoesNotRequireCloud(t *testing.T) {
+	server := &mcpServer{}
+	result, err := server.addChecklist("task-1", []string{"One", "Two"}, true)
+	if err != nil {
+		t.Fatalf("addChecklist dry-run failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("dry-run returned tool error: %#v", result)
+	}
+	var payload struct {
+		Status string `json:"status"`
+		UUID   string `json:"uuid"`
+		Items  []struct {
+			E string `json:"e"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
+		t.Fatalf("unmarshal dry-run content failed: %v", err)
+	}
+	if payload.Status != "dry-run" || payload.UUID != "task-1" || len(payload.Items) != 2 {
+		t.Fatalf("payload = %#v, want two dry-run checklist items", payload)
+	}
+	if payload.Items[0].E != "ChecklistItem3" {
+		t.Fatalf("item kind = %q, want ChecklistItem3", payload.Items[0].E)
 	}
 }

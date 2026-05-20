@@ -62,6 +62,44 @@ func TestSync_PaginatesFromStoredCursor(t *testing.T) {
 	}
 }
 
+func TestQuickSync_SkipsHistoryMetadataPreflight(t *testing.T) {
+	t.Parallel()
+
+	const historyID = "test-history-id"
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if !strings.HasSuffix(r.URL.Path, "/items") {
+			t.Fatalf("QuickSync made unexpected metadata request to %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("start-index"); got != "7" {
+			t.Fatalf("start-index = %q, want 7", got)
+		}
+		fmt.Fprint(w, `{"items":[],"current-item-index":7,"schema":301}`)
+	}))
+	defer ts.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	client := things.New(ts.URL, "test@example.com", "password")
+	syncer, err := Open(dbPath, client)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer syncer.Close()
+
+	if err := syncer.saveSyncState(historyID, 7); err != nil {
+		t.Fatalf("saveSyncState failed: %v", err)
+	}
+
+	changes, err := syncer.QuickSync()
+	if err != nil {
+		t.Fatalf("QuickSync failed: %v", err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("changes = %d, want 0", len(changes))
+	}
+}
+
 func TestOpen(t *testing.T) {
 	t.Parallel()
 
