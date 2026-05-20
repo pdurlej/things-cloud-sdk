@@ -20,6 +20,7 @@ type fileConfig struct {
 	Username  string `json:"username"`
 	Email     string `json:"email"`
 	Password  string `json:"password"`
+	Token     string `json:"token"`
 	Cache     string `json:"cache"`
 	CachePath string `json:"cache_path"`
 }
@@ -72,6 +73,9 @@ func LoadFile(path string) (Config, error) {
 	if cfg.Cache == "" {
 		cfg.Cache = raw.CachePath
 	}
+	if cfg.Password == "" {
+		cfg.Password = raw.Token
+	}
 	return cfg, nil
 }
 
@@ -80,6 +84,9 @@ func ApplyEnv(cfg Config) Config {
 		cfg.Username = v
 	}
 	if v := os.Getenv("THINGS_PASSWORD"); v != "" {
+		cfg.Password = v
+	}
+	if v := os.Getenv("THINGS_TOKEN"); v != "" {
 		cfg.Password = v
 	}
 	if v := os.Getenv("THINGS_CLI_CACHE"); v != "" {

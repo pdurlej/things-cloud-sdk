@@ -148,8 +148,8 @@ func TestIntegration(t *testing.T) {
 		if allChanges[0].ChangeType() != "TaskCreated" {
 			t.Errorf("expected first logged change type TaskCreated, got %s", allChanges[0].ChangeType())
 		}
-		if _, ok := allChanges[0].(LoggedChange); !ok {
-			t.Errorf("expected persisted change to be LoggedChange, got %T", allChanges[0])
+		if _, ok := allChanges[0].(TaskCreated); !ok {
+			t.Errorf("expected persisted change to rehydrate as TaskCreated, got %T", allChanges[0])
 		}
 	})
 }

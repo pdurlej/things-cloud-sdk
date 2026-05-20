@@ -65,6 +65,33 @@ func TestRepeaterConfiguration_NewFields(t *testing.T) {
 	if rc.StartReference == nil {
 		t.Error("expected StartReference to be set")
 	}
+	if !rc.IsAfterCompletion() {
+		t.Error("expected Type=1 repeater to be after completion")
+	}
+}
+
+func TestNewRepeatAfterCompletion(t *testing.T) {
+	start := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
+	rc := NewRepeatAfterCompletion(FrequencyUnitDaily, 2, start)
+
+	if !rc.IsAfterCompletion() {
+		t.Fatal("expected repeater to be after completion")
+	}
+	if rc.Type != int(RepeaterTypeAfterCompletion) {
+		t.Fatalf("Type = %d, want %d", rc.Type, RepeaterTypeAfterCompletion)
+	}
+	if rc.FrequencyUnit != FrequencyUnitDaily {
+		t.Fatalf("FrequencyUnit = %d, want daily", rc.FrequencyUnit)
+	}
+	if rc.FrequencyAmplitude != 2 {
+		t.Fatalf("FrequencyAmplitude = %d, want 2", rc.FrequencyAmplitude)
+	}
+	if rc.StartReference == nil || !rc.StartReference.Time().Equal(start) {
+		t.Fatalf("StartReference = %v, want %v", rc.StartReference, start)
+	}
+	if !rc.IsNeverending() {
+		t.Fatal("expected default repeat-after-completion rule to be neverending")
+	}
 }
 
 func TestRepeaterConfiguration_IsNeverending(t *testing.T) {

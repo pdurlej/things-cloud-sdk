@@ -27,6 +27,21 @@ func TestLoadFileSupportsEmailAndCachePathAliases(t *testing.T) {
 	}
 }
 
+func TestLoadFileSupportsTokenAlias(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"username":"me@example.com","token":"secret-token"}`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile failed: %v", err)
+	}
+	if cfg.Password != "secret-token" {
+		t.Fatalf("Password = %q, want token value", cfg.Password)
+	}
+}
+
 func TestLoadUsesEnvOverrides(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte(`{"username":"file@example.com","password":"file-pass","cache":"file-cache.json"}`), 0o600); err != nil {
@@ -49,6 +64,15 @@ func TestLoadUsesEnvOverrides(t *testing.T) {
 	}
 	if cfg.Cache != "env-cache.json" {
 		t.Fatalf("Cache = %q, want env-cache.json", cfg.Cache)
+	}
+}
+
+func TestTokenEnvOverridesPassword(t *testing.T) {
+	t.Setenv("THINGS_TOKEN", "token-pass")
+
+	cfg := ApplyEnv(Config{Password: "file-pass"})
+	if cfg.Password != "token-pass" {
+		t.Fatalf("Password = %q, want token-pass", cfg.Password)
 	}
 }
 
