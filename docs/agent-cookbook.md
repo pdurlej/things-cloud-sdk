@@ -94,7 +94,49 @@ Schedule buckets:
 Use `--deadline YYYY-MM-DD` for deadline dates. Use `--scheduled YYYY-MM-DD` for
 scheduled dates.
 
-## 6. Complete, Trash, or Move a Task
+## 6. Create a Recurring Task Safely
+
+Preview first:
+
+```bash
+things-cloud-cli create "Check car listings" --repeat every-day --dry-run
+```
+
+Execute after confirmation:
+
+```bash
+things-cloud-cli create "Check car listings" --repeat every-day
+```
+
+Supported repeat specs:
+
+- `every-day`
+- `daily`
+- `weekly`
+- `every-week`
+- `weekly:mon,wed`
+- `after-completion:every-day`
+- `after-completion:weekly:mon`
+
+Use `--repeat-start YYYY-MM-DD` to set the first reference date. Monthly,
+yearly, repeat counts, and custom end dates are not exposed through the CLI yet.
+
+## 7. Read Completion Evidence
+
+Do not infer completion from a task disappearing from Today. Normal list views
+hide completed tasks.
+
+Use `completed` or `logbook`:
+
+```bash
+things-cloud-cli completed --since 2026-05-20T00:00:00Z --format full
+things-cloud-cli logbook --since 2026-05-20 --limit 50 --format full
+```
+
+The full output includes UUID, title, `completedAt`, area/project/parent
+metadata, and tag IDs for reconciliation.
+
+## 8. Complete, Trash, or Move a Task
 
 Dry-run first:
 
@@ -112,7 +154,7 @@ things-cloud-cli trash <task-uuid>
 things-cloud-cli move-to-today <task-uuid>
 ```
 
-## 7. Edit a Task
+## 9. Edit a Task
 
 Preview:
 
@@ -126,13 +168,20 @@ Execute:
 things-cloud-cli edit <task-uuid> --title "New title" --when anytime
 ```
 
-## 8. Batch Multiple Writes
+Clear repeat metadata:
+
+```bash
+things-cloud-cli edit <task-uuid> --repeat none --dry-run
+things-cloud-cli edit <task-uuid> --repeat none
+```
+
+## 10. Batch Multiple Writes
 
 Batch when an agent needs to apply several confirmed changes at once:
 
 ```bash
 echo '[
-  {"cmd": "create", "title": "Task 1", "when": "today"},
+  {"cmd": "create", "title": "Task 1", "when": "today", "repeat": "every-day"},
   {"cmd": "create", "title": "Task 2", "when": "anytime"},
   {"cmd": "complete", "uuid": "task-uuid"}
 ]' | things-cloud-cli batch --dry-run
@@ -149,7 +198,7 @@ Supported batch commands:
 - `move-to-area`
 - `edit`
 
-## 9. MCP Integration
+## 11. MCP Integration
 
 Install:
 
@@ -193,7 +242,7 @@ Core MCP tools:
 - `list_areas`
 - `list_tags`
 
-## 10. Long-Running Agent With Persistent Sync
+## 12. Long-Running Agent With Persistent Sync
 
 Use `sync` when an agent or service needs to remember state across runs.
 
@@ -227,7 +276,7 @@ round trips matters:
 changes, err := syncer.QuickSync()
 ```
 
-## 11. Local SQLite Read-Only Mode
+## 13. Local SQLite Read-Only Mode
 
 Use this only to inspect local Things data on macOS. Do not write to the local
 database.
@@ -245,11 +294,13 @@ tasks, err := reader.Tasks(context.Background(), local.Query{
 })
 ```
 
-## 12. What Agents Should Not Do
+## 14. What Agents Should Not Do
 
 - Do not write to local Things SQLite.
 - Do not create raw Things wire payloads unless the task explicitly requires it.
 - Do not treat `st` as completion status. It is schedule.
 - Do not treat `ss` as schedule. It is completion status.
 - Do not skip `--dry-run` for destructive or user-visible writes.
+- Do not infer completion from absence in normal task lists. Use
+  `completed`/`logbook`.
 - Do not store credentials or local sync DBs in git.

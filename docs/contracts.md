@@ -65,6 +65,46 @@ Shape:
 
 Optional fields may be omitted when empty.
 
+## CLI Completed/Logbook Format
+
+Commands:
+
+```bash
+things-cloud-cli completed --since 2026-05-20T00:00:00Z --format full
+things-cloud-cli logbook --since 2026-05-20 --limit 50 --format full
+```
+
+Shape:
+
+```json
+[
+  {
+    "uuid": "string",
+    "title": "string",
+    "status": "completed",
+    "completedAt": "YYYY-MM-DDTHH:MM:SSZ",
+    "modifiedAt": "YYYY-MM-DDTHH:MM:SSZ",
+    "scheduledDate": "YYYY-MM-DD",
+    "deadlineDate": "YYYY-MM-DD",
+    "areaIds": ["string"],
+    "areaTitles": ["string"],
+    "parentIds": ["string"],
+    "parentTitles": ["string"],
+    "projectIds": ["string"],
+    "projectTitles": ["string"],
+    "tagIds": ["string"]
+  }
+]
+```
+
+Rules:
+
+- Normal list views exclude completed tasks.
+- `completed` and `logbook` are aliases for completion evidence.
+- `--since` and `--until` accept RFC3339 timestamps or `YYYY-MM-DD`.
+- `--until` is exclusive.
+- Tasks without completion timestamps are omitted when a time window is used.
+
 ## CLI Write Success
 
 Create task:
@@ -135,8 +175,40 @@ Rules:
 
 - Dry-run output is a preview. It must not write to Things Cloud.
 - `items` contains Things Cloud wire payloads for review/debugging.
+- Repeating tasks include an `rr` payload.
 - Agents should summarize the user-visible effect, not expose raw payloads by
   default.
+
+## CLI Repeat Specs
+
+Supported `--repeat` values:
+
+- `every-day`
+- `daily`
+- `weekly`
+- `every-week`
+- `weekly:mon,wed`
+- `after-completion:every-day`
+- `after-completion:weekly:mon`
+- `none`, `off`, `clear` for edit/batch edit clearing
+
+Unsupported through the CLI:
+
+- monthly/yearly repeat rules
+- custom end dates
+- repeat counts
+- arbitrary raw recurrence JSON
+
+Batch JSON uses `repeat` and optional `repeatStart` fields:
+
+```json
+{
+  "cmd": "create",
+  "title": "Check car listings",
+  "repeat": "weekly:mon,wed",
+  "repeatStart": "2026-05-20"
+}
+```
 
 ## MCP Tool Result
 

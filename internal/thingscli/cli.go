@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Wire-format types (no omitempty — Things expects all fields on creates)
+// Wire-format types (no omitempty - Things expects all fields on creates)
 // ---------------------------------------------------------------------------
 
 // WireNote matches the Things note wire format exactly.
@@ -55,7 +56,7 @@ func (w writeEnvelope) MarshalJSON() ([]byte, error) {
 	}{w.action, w.kind, w.payload})
 }
 
-// TaskCreatePayload — all 34 fields, no omitempty, field order matches HAR.
+// TaskCreatePayload - all 34 fields, no omitempty, field order matches HAR.
 type TaskCreatePayload struct {
 	Tp   int              `json:"tp"`
 	Sr   *int64           `json:"sr"`
@@ -93,7 +94,7 @@ type TaskCreatePayload struct {
 	Xx   WireExtension    `json:"xx"`
 }
 
-// ChecklistItemCreatePayload — all 9 fields for checklist item creation.
+// ChecklistItemCreatePayload - all 9 fields for checklist item creation.
 type ChecklistItemCreatePayload struct {
 	Cd float64       `json:"cd"`
 	Md *float64      `json:"md"`
@@ -106,7 +107,7 @@ type ChecklistItemCreatePayload struct {
 	Xx WireExtension `json:"xx"`
 }
 
-// TagCreatePayload — all 5 fields for tag creation.
+// TagCreatePayload - all 5 fields for tag creation.
 type TagCreatePayload struct {
 	Tt string        `json:"tt"`
 	Ix int           `json:"ix"`
@@ -171,6 +172,38 @@ func parseDate(s string) *time.Time {
 	return &t
 }
 
+func parseDateOrTime(s string) (*time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		utc := t.UTC()
+		return &utc, nil
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		utc := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+		return &utc, nil
+	}
+	return nil, fmt.Errorf("expected RFC3339 timestamp or YYYY-MM-DD date: %s", s)
+}
+
+func parseLimit(opts map[string]string) int {
+	if opts["limit"] == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(opts["limit"])
+	if err != nil || n < 1 {
+		fatalf("--limit requires a positive integer")
+	}
+	return n
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}
+
+func timestampPtr(t time.Time) *thingscloud.Timestamp {
+	ts := thingscloud.Timestamp(t.UTC())
+	return &ts
+}
+
 func parseArgs(args []string) map[string]string {
 	result := make(map[string]string)
 	for i := 0; i < len(args); i++ {
@@ -210,6 +243,159 @@ func hasExplicitSchedule(opts map[string]string) bool {
 	_, hasWhen := opts["when"]
 	_, hasScheduled := opts["scheduled"]
 	return hasWhen || hasScheduled
+}
+
+type repeatPlan struct {
+	Clear bool
+	Rule  *thingscloud.RepeaterConfiguration
+	First time.Time
+}
+
+func parseRepeatPlan(opts map[string]string) (*repeatPlan, error) {
+	spec := strings.TrimSpace(opts["repeat"])
+	if spec == "" {
+		return nil, nil
+	}
+
+	start := time.Now().UTC()
+	if v := opts["repeat-start"]; v != "" {
+		t, err := parseDateOrTime(v)
+		if err != nil {
+			return nil, fmt.Errorf("--repeat-start: %w", err)
+		}
+		start = *t
+	} else if v := opts["scheduled"]; v != "" {
+		t, err := parseDateOrTime(v)
+		if err != nil {
+			return nil, fmt.Errorf("--scheduled: %w", err)
+		}
+		start = *t
+	} else if opts["when"] == "today" {
+		now := time.Now().UTC()
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	} else {
+		start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	}
+
+	spec = strings.ToLower(spec)
+	switch spec {
+	case "none", "off", "clear":
+		return &repeatPlan{Clear: true}, nil
+	}
+
+	repeaterType := thingscloud.RepeaterTypeScheduled
+	if strings.HasPrefix(spec, "after-completion:") {
+		repeaterType = thingscloud.RepeaterTypeAfterCompletion
+		spec = strings.TrimPrefix(spec, "after-completion:")
+	}
+
+	unit, details, err := parseRepeatPattern(spec, start)
+	if err != nil {
+		return nil, err
+	}
+
+	rule := thingscloud.RepeaterConfiguration{
+		RepeatCount:         int64Ptr(0),
+		FrequencyUnit:       unit,
+		FrequencyAmplitude:  1,
+		DetailConfiguration: details,
+		LastScheduledAt:     timestampPtr(time.Date(4001, 1, 1, 0, 0, 0, 0, time.UTC)),
+		Version:             4,
+		Type:                int(repeaterType),
+		TimeShift:           0,
+		StartReference:      timestampPtr(start),
+	}
+	first := firstRepeatDate(unit, details, start)
+	if first.IsZero() {
+		first = start
+	}
+	rule.FirstScheduledAt = timestampPtr(first)
+
+	return &repeatPlan{Rule: &rule, First: first}, nil
+}
+
+func firstRepeatDate(unit thingscloud.FrequencyUnit, details []thingscloud.RepeaterDetailConfiguration, start time.Time) time.Time {
+	if unit == thingscloud.FrequencyUnitDaily {
+		return start
+	}
+	if unit == thingscloud.FrequencyUnitWeekly {
+		bestDelta := 7
+		for _, detail := range details {
+			if detail.Weekday == nil {
+				continue
+			}
+			delta := (int(*detail.Weekday) - int(start.Weekday()) + 7) % 7
+			if delta < bestDelta {
+				bestDelta = delta
+			}
+		}
+		if bestDelta < 7 {
+			return start.AddDate(0, 0, bestDelta)
+		}
+	}
+	return time.Time{}
+}
+
+func parseRepeatPattern(spec string, start time.Time) (thingscloud.FrequencyUnit, []thingscloud.RepeaterDetailConfiguration, error) {
+	switch spec {
+	case "daily", "every-day":
+		return thingscloud.FrequencyUnitDaily, []thingscloud.RepeaterDetailConfiguration{{Day: int64Ptr(0)}}, nil
+	case "weekly", "every-week":
+		wd := start.Weekday()
+		return thingscloud.FrequencyUnitWeekly, []thingscloud.RepeaterDetailConfiguration{{Weekday: &wd}}, nil
+	}
+
+	if strings.HasPrefix(spec, "weekly:") {
+		rawDays := strings.TrimPrefix(spec, "weekly:")
+		if strings.TrimSpace(rawDays) == "" {
+			return 0, nil, fmt.Errorf("--repeat weekly requires at least one weekday")
+		}
+		var details []thingscloud.RepeaterDetailConfiguration
+		for _, raw := range strings.Split(rawDays, ",") {
+			wd, ok := parseWeekday(raw)
+			if !ok {
+				return 0, nil, fmt.Errorf("unsupported repeat weekday: %s", raw)
+			}
+			day := wd
+			details = append(details, thingscloud.RepeaterDetailConfiguration{Weekday: &day})
+		}
+		return thingscloud.FrequencyUnitWeekly, details, nil
+	}
+
+	return 0, nil, fmt.Errorf("unsupported --repeat value %q; supported: every-day, daily, weekly, every-week, weekly:mon,wed, after-completion:every-day, after-completion:weekly:mon", spec)
+}
+
+func parseWeekday(s string) (time.Weekday, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "sun", "sunday":
+		return time.Sunday, true
+	case "mon", "monday":
+		return time.Monday, true
+	case "tue", "tues", "tuesday":
+		return time.Tuesday, true
+	case "wed", "wednesday":
+		return time.Wednesday, true
+	case "thu", "thur", "thurs", "thursday":
+		return time.Thursday, true
+	case "fri", "friday":
+		return time.Friday, true
+	case "sat", "saturday":
+		return time.Saturday, true
+	default:
+		return time.Sunday, false
+	}
+}
+
+func repeatRawMessage(plan *repeatPlan) (*json.RawMessage, error) {
+	if plan == nil || plan.Clear {
+		return nil, nil
+	}
+	bs, err := json.Marshal(plan.Rule)
+	if err != nil {
+		return nil, err
+	}
+	raw := json.RawMessage(bs)
+	return &raw, nil
 }
 
 func fatal(op string, err error) {
@@ -307,7 +493,7 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 			tp = 1
 		case "heading":
 			tp = 2
-			st = 1 // headings are structural — always "started" (anytime), never inbox
+			st = 1 // headings are structural - always "started" (anytime), never inbox
 		}
 	}
 
@@ -356,7 +542,7 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 	// --project
 	if v, ok := opts["project"]; ok && v != "" {
 		pr = []string{v}
-		// Tasks in projects are already triaged — auto-set anytime (st=1) unless --when was explicit
+		// Tasks in projects are already triaged - auto-set anytime (st=1) unless --when was explicit
 		if _, hasWhen := opts["when"]; !hasWhen {
 			st = 1
 		}
@@ -365,7 +551,7 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 	// --heading
 	if v, ok := opts["heading"]; ok && v != "" {
 		agr = []string{v}
-		// Tasks under headings are structural — auto-set anytime (st=1) unless --when was explicit
+		// Tasks under headings are structural - auto-set anytime (st=1) unless --when was explicit
 		if _, hasWhen := opts["when"]; !hasWhen {
 			st = 1
 		}
@@ -374,7 +560,7 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 	// --area
 	if v, ok := opts["area"]; ok && v != "" {
 		ar = []string{v}
-		// Tasks in areas are already triaged — auto-set anytime (st=1) unless --when was explicit
+		// Tasks in areas are already triaged - auto-set anytime (st=1) unless --when was explicit
 		if _, hasWhen := opts["when"]; !hasWhen {
 			st = 1
 		}
@@ -409,7 +595,7 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 		Cd:   now,
 		Lt:   false,
 		Icc:  0,
-		Md:   nil, // must be null for creates — Things.app crashes otherwise
+		Md:   nil, // must be null for creates - Things.app crashes otherwise
 		Ti:   0,
 		Dd:   dd,
 		Ato:  nil,
@@ -425,8 +611,36 @@ func newTaskCreatePayload(title string, opts map[string]string) TaskCreatePayloa
 	}
 }
 
+func newTaskCreatePayloadWithRepeat(title string, opts map[string]string) (TaskCreatePayload, error) {
+	plan, err := parseRepeatPlan(opts)
+	if err != nil {
+		return TaskCreatePayload{}, err
+	}
+	if plan != nil && !plan.Clear && opts["when"] == "inbox" {
+		return TaskCreatePayload{}, fmt.Errorf("--repeat cannot be combined with --when inbox")
+	}
+	if plan != nil && !plan.Clear && !hasExplicitSchedule(opts) {
+		cloned := make(map[string]string, len(opts)+1)
+		for k, v := range opts {
+			cloned[k] = v
+		}
+		cloned["scheduled"] = plan.First.Format("2006-01-02")
+		opts = cloned
+	}
+
+	payload := newTaskCreatePayload(title, opts)
+	if plan != nil {
+		raw, err := repeatRawMessage(plan)
+		if err != nil {
+			return TaskCreatePayload{}, err
+		}
+		payload.Rr = raw
+	}
+	return payload, nil
+}
+
 // ---------------------------------------------------------------------------
-// Fluent update builder — for sparse updates (edit, complete, trash, etc.)
+// Fluent update builder - for sparse updates (edit, complete, trash, etc.)
 // ---------------------------------------------------------------------------
 
 type taskUpdate struct {
@@ -525,6 +739,11 @@ func (u *taskUpdate) Heading(uuid string) *taskUpdate {
 
 func (u *taskUpdate) Tags(uuids []string) *taskUpdate {
 	u.fields["tg"] = uuids
+	return u
+}
+
+func (u *taskUpdate) Repeater(rule *thingscloud.RepeaterConfiguration) *taskUpdate {
+	u.fields["rr"] = rule
 	return u
 }
 
@@ -717,6 +936,7 @@ type TaskOutput struct {
 	InTrash       bool     `json:"inTrash"`
 	IsProject     bool     `json:"isProject"`
 	Schedule      int      `json:"schedule"`
+	CompletedAt   *string  `json:"completedAt,omitempty"`
 	ScheduledDate *string  `json:"scheduledDate,omitempty"`
 	DeadlineDate  *string  `json:"deadlineDate,omitempty"`
 	AreaIDs       []string `json:"areaIds,omitempty"`
@@ -727,6 +947,30 @@ type SimpleTaskOutput struct {
 	UUID   string `json:"uuid"`
 	Title  string `json:"title"`
 	Status string `json:"status"`
+}
+
+type CompletedTaskOutput struct {
+	UUID          string   `json:"uuid"`
+	Title         string   `json:"title"`
+	Status        string   `json:"status"`
+	CompletedAt   *string  `json:"completedAt,omitempty"`
+	ModifiedAt    *string  `json:"modifiedAt,omitempty"`
+	ScheduledDate *string  `json:"scheduledDate,omitempty"`
+	DeadlineDate  *string  `json:"deadlineDate,omitempty"`
+	AreaIDs       []string `json:"areaIds,omitempty"`
+	AreaTitles    []string `json:"areaTitles,omitempty"`
+	ParentIDs     []string `json:"parentIds,omitempty"`
+	ParentTitles  []string `json:"parentTitles,omitempty"`
+	ProjectIDs    []string `json:"projectIds,omitempty"`
+	ProjectTitles []string `json:"projectTitles,omitempty"`
+	TagIDs        []string `json:"tagIds,omitempty"`
+}
+
+type SimpleCompletedTaskOutput struct {
+	UUID        string  `json:"uuid"`
+	Title       string  `json:"title"`
+	Status      string  `json:"status"`
+	CompletedAt *string `json:"completedAt,omitempty"`
 }
 
 func taskToOutput(t *thingscloud.Task) TaskOutput {
@@ -740,6 +984,10 @@ func taskToOutput(t *thingscloud.Task) TaskOutput {
 		Schedule:  int(t.Schedule),
 		AreaIDs:   t.AreaIDs,
 		ParentIDs: t.ParentTaskIDs,
+	}
+	if t.CompletionDate != nil {
+		s := t.CompletionDate.UTC().Format(time.RFC3339)
+		out.CompletedAt = &s
 	}
 	if t.ScheduledDate != nil {
 		s := t.ScheduledDate.Format("2006-01-02")
@@ -796,6 +1044,96 @@ func outputTask(task TaskOutput, format string) {
 		return
 	}
 	outputJSON(task)
+}
+
+func completedTaskToOutput(state *memory.State, t *thingscloud.Task) CompletedTaskOutput {
+	out := CompletedTaskOutput{
+		UUID:      t.UUID,
+		Title:     t.Title,
+		Status:    taskStatusString(taskToOutput(t)),
+		AreaIDs:   t.AreaIDs,
+		ParentIDs: t.ParentTaskIDs,
+		TagIDs:    t.TagIDs,
+	}
+	if t.CompletionDate != nil {
+		s := t.CompletionDate.UTC().Format(time.RFC3339)
+		out.CompletedAt = &s
+	}
+	if t.ModificationDate != nil {
+		s := t.ModificationDate.UTC().Format(time.RFC3339)
+		out.ModifiedAt = &s
+	}
+	if t.ScheduledDate != nil {
+		s := t.ScheduledDate.Format("2006-01-02")
+		out.ScheduledDate = &s
+	}
+	if t.DeadlineDate != nil {
+		s := t.DeadlineDate.Format("2006-01-02")
+		out.DeadlineDate = &s
+	}
+	for _, id := range t.AreaIDs {
+		if area := state.Areas[id]; area != nil && area.Title != "" {
+			out.AreaTitles = append(out.AreaTitles, area.Title)
+		}
+	}
+	for _, id := range t.ParentTaskIDs {
+		parent := state.Tasks[id]
+		if parent == nil {
+			continue
+		}
+		if parent.Title != "" {
+			out.ParentTitles = append(out.ParentTitles, parent.Title)
+		}
+		if parent.Type == thingscloud.TaskTypeProject {
+			out.ProjectIDs = append(out.ProjectIDs, parent.UUID)
+			if parent.Title != "" {
+				out.ProjectTitles = append(out.ProjectTitles, parent.Title)
+			}
+		}
+		for _, parentID := range parent.ParentTaskIDs {
+			project := state.Tasks[parentID]
+			if project != nil && project.Type == thingscloud.TaskTypeProject {
+				out.ProjectIDs = appendUnique(out.ProjectIDs, project.UUID)
+				if project.Title != "" {
+					out.ProjectTitles = appendUnique(out.ProjectTitles, project.Title)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func completedTaskToSimpleOutput(t CompletedTaskOutput) SimpleCompletedTaskOutput {
+	return SimpleCompletedTaskOutput{
+		UUID:        t.UUID,
+		Title:       t.Title,
+		Status:      t.Status,
+		CompletedAt: t.CompletedAt,
+	}
+}
+
+func outputCompletedTasks(tasks []CompletedTaskOutput, format string) {
+	if format == "simple" {
+		out := make([]SimpleCompletedTaskOutput, len(tasks))
+		for i, task := range tasks {
+			out[i] = completedTaskToSimpleOutput(task)
+		}
+		outputJSON(out)
+		return
+	}
+	outputJSON(tasks)
+}
+
+func appendUnique(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func parseOutputArgs(args []string) ([]string, string) {
@@ -904,6 +1242,65 @@ func listTasks(state *memory.State, opts map[string]string) []TaskOutput {
 	return tasks
 }
 
+func completedTasks(state *memory.State, opts map[string]string) []CompletedTaskOutput {
+	var since, until *time.Time
+	if opts["since"] != "" {
+		t, err := parseDateOrTime(opts["since"])
+		if err != nil {
+			fatalf("--since: %v", err)
+		}
+		since = t
+	}
+	if opts["until"] != "" {
+		t, err := parseDateOrTime(opts["until"])
+		if err != nil {
+			fatalf("--until: %v", err)
+		}
+		until = t
+	}
+	limit := parseLimit(opts)
+
+	var tasks []CompletedTaskOutput
+	for _, task := range state.Tasks {
+		if task.Type == thingscloud.TaskTypeProject || task.Status != thingscloud.TaskStatusCompleted {
+			continue
+		}
+		if task.CompletionDate != nil {
+			completedAt := task.CompletionDate.UTC()
+			if since != nil && completedAt.Before(*since) {
+				continue
+			}
+			if until != nil && !completedAt.Before(*until) {
+				continue
+			}
+		} else if since != nil || until != nil {
+			continue
+		}
+		tasks = append(tasks, completedTaskToOutput(state, task))
+	}
+
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].CompletedAt != nil && tasks[j].CompletedAt != nil && *tasks[i].CompletedAt != *tasks[j].CompletedAt {
+			return *tasks[i].CompletedAt > *tasks[j].CompletedAt
+		}
+		if tasks[i].CompletedAt != nil && tasks[j].CompletedAt == nil {
+			return true
+		}
+		if tasks[i].CompletedAt == nil && tasks[j].CompletedAt != nil {
+			return false
+		}
+		if tasks[i].Title != tasks[j].Title {
+			return tasks[i].Title < tasks[j].Title
+		}
+		return tasks[i].UUID < tasks[j].UUID
+	})
+
+	if limit > 0 && limit < len(tasks) {
+		tasks = tasks[:limit]
+	}
+	return tasks
+}
+
 func cmdList(state *memory.State, args []string) {
 	args, format := parseOutputArgs(args)
 	outputTasks(listTasks(state, parseArgs(args)), format)
@@ -918,6 +1315,11 @@ func cmdSearch(state *memory.State, args []string) {
 	args, format := parseOutputArgs(args)
 	requireArgs(args, 1, "things-cli search <query>")
 	outputTasks(listTasks(state, map[string]string{"search": strings.Join(args, " ")}), format)
+}
+
+func cmdCompleted(state *memory.State, args []string) {
+	args, format := parseOutputArgs(args)
+	outputCompletedTasks(completedTasks(state, parseArgs(args)), format)
 }
 
 func cmdShow(state *memory.State, uuid string, args []string) {
@@ -1037,7 +1439,7 @@ func cmdWriteChecklistItems(history *thingscloud.History, dryRun bool, taskUUID 
 func cmdCreate(history *thingscloud.History, args []string) {
 	var dryRun bool
 	args, dryRun = stripBoolFlag(args, "dry-run")
-	requireArgs(args, 1, "things-cli create \"Title\" [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--project UUID] [--heading UUID] [--area UUID] [--tags UUID,...] [--type task|project|heading] [--uuid UUID] [--checklist \"Item 1,Item 2,...\"]")
+	requireArgs(args, 1, "things-cli create \"Title\" [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--project UUID] [--heading UUID] [--area UUID] [--tags UUID,...] [--type task|project|heading] [--uuid UUID] [--checklist \"Item 1,Item 2,...\"] [--repeat SPEC] [--repeat-start YYYY-MM-DD]")
 
 	title := args[0]
 	opts := parseArgs(args[1:])
@@ -1047,7 +1449,10 @@ func cmdCreate(history *thingscloud.History, args []string) {
 		taskUUID = generateUUID()
 	}
 
-	payload := newTaskCreatePayload(title, opts)
+	payload, err := newTaskCreatePayloadWithRepeat(title, opts)
+	if err != nil {
+		fatalf("%v", err)
+	}
 	env := writeEnvelope{id: taskUUID, action: 0, kind: "Task6", payload: payload}
 
 	envelopes := []thingscloud.Identifiable{env}
@@ -1080,7 +1485,7 @@ func cmdEdit(history *thingscloud.History, taskUUID string, args []string) {
 	args, dryRun = stripBoolFlag(args, "dry-run")
 	opts := parseArgs(args)
 	if len(opts) == 0 {
-		fatalf("Usage: things-cli edit <uuid> [--title ...] [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--area UUID] [--project UUID] [--heading UUID] [--tags UUID,...]")
+		fatalf("Usage: things-cli edit <uuid> [--title ...] [--note ...] [--when today|anytime|someday|inbox] [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD] [--area UUID] [--project UUID] [--heading UUID] [--tags UUID,...] [--repeat SPEC|none] [--repeat-start YYYY-MM-DD]")
 	}
 
 	u := newTaskUpdate()
@@ -1144,6 +1549,21 @@ func cmdEdit(history *thingscloud.History, taskUUID string, args []string) {
 	}
 	if v, ok := opts["tags"]; ok && v != "" {
 		u.Tags(strings.Split(v, ","))
+	}
+	if _, ok := opts["repeat"]; ok {
+		plan, err := parseRepeatPlan(opts)
+		if err != nil {
+			fatalf("%v", err)
+		}
+		if plan != nil {
+			if !plan.Clear && opts["when"] == "inbox" {
+				fatalf("--repeat cannot be combined with --when inbox")
+			}
+			u.Repeater(plan.Rule)
+			if !plan.Clear && !hasExplicitSchedule(opts) {
+				u.ScheduleDate(plan.First.Unix())
+			}
+		}
 	}
 
 	env := writeEnvelope{id: taskUUID, action: 1, kind: "Task6", payload: u.build()}
@@ -1282,18 +1702,21 @@ func cmdCreateTag(history *thingscloud.History, args []string) {
 
 // BatchOp represents a single operation in a batch request.
 type BatchOp struct {
-	Cmd      string            `json:"cmd"`
-	UUID     string            `json:"uuid,omitempty"`
-	Title    string            `json:"title,omitempty"`
-	Note     string            `json:"note,omitempty"`
-	When     string            `json:"when,omitempty"`
-	Deadline string            `json:"deadline,omitempty"`
-	Project  string            `json:"project,omitempty"`
-	Area     string            `json:"area,omitempty"`
-	Heading  string            `json:"heading,omitempty"`
-	Tags     []string          `json:"tags,omitempty"`
-	Type     string            `json:"type,omitempty"`
-	Extra    map[string]string `json:"extra,omitempty"` // for any additional opts
+	Cmd         string            `json:"cmd"`
+	UUID        string            `json:"uuid,omitempty"`
+	Title       string            `json:"title,omitempty"`
+	Note        string            `json:"note,omitempty"`
+	When        string            `json:"when,omitempty"`
+	Deadline    string            `json:"deadline,omitempty"`
+	Scheduled   string            `json:"scheduled,omitempty"`
+	Repeat      string            `json:"repeat,omitempty"`
+	RepeatStart string            `json:"repeatStart,omitempty"`
+	Project     string            `json:"project,omitempty"`
+	Area        string            `json:"area,omitempty"`
+	Heading     string            `json:"heading,omitempty"`
+	Tags        []string          `json:"tags,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	Extra       map[string]string `json:"extra,omitempty"` // for any additional opts
 }
 
 func cmdBatch(history *thingscloud.History, dryRun bool) {
@@ -1386,6 +1809,15 @@ func buildBatchCreate(op BatchOp) (thingscloud.Identifiable, map[string]string, 
 	if op.Deadline != "" {
 		opts["deadline"] = op.Deadline
 	}
+	if op.Scheduled != "" {
+		opts["scheduled"] = op.Scheduled
+	}
+	if op.Repeat != "" {
+		opts["repeat"] = op.Repeat
+	}
+	if op.RepeatStart != "" {
+		opts["repeat-start"] = op.RepeatStart
+	}
 	if op.Project != "" {
 		opts["project"] = op.Project
 	}
@@ -1405,7 +1837,10 @@ func buildBatchCreate(op BatchOp) (thingscloud.Identifiable, map[string]string, 
 		opts[k] = v
 	}
 
-	payload := newTaskCreatePayload(op.Title, opts)
+	payload, err := newTaskCreatePayloadWithRepeat(op.Title, opts)
+	if err != nil {
+		return nil, nil, err
+	}
 	env := writeEnvelope{id: taskUUID, action: 0, kind: "Task6", payload: payload}
 
 	return env, map[string]string{"cmd": "create", "uuid": taskUUID, "title": op.Title}, nil
@@ -1518,6 +1953,13 @@ func buildBatchEdit(op BatchOp) (thingscloud.Identifiable, map[string]string, er
 			u.Deadline(t.Unix())
 		}
 	}
+	if op.Scheduled != "" {
+		t, err := parseDateOrTime(op.Scheduled)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scheduled: %w", err)
+		}
+		u.ScheduleDate(t.Unix())
+	}
 	if op.Project != "" {
 		u.Project(op.Project)
 		if op.When == "" {
@@ -1538,6 +1980,31 @@ func buildBatchEdit(op BatchOp) (thingscloud.Identifiable, map[string]string, er
 	}
 	if len(op.Tags) > 0 {
 		u.Tags(op.Tags)
+	}
+	if op.Repeat != "" {
+		opts := map[string]string{"repeat": op.Repeat}
+		if op.RepeatStart != "" {
+			opts["repeat-start"] = op.RepeatStart
+		}
+		if op.Scheduled != "" {
+			opts["scheduled"] = op.Scheduled
+		}
+		if op.When != "" {
+			opts["when"] = op.When
+		}
+		plan, err := parseRepeatPlan(opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		if plan != nil {
+			if !plan.Clear && op.When == "inbox" {
+				return nil, nil, fmt.Errorf("--repeat cannot be combined with inbox")
+			}
+			u.Repeater(plan.Rule)
+			if !plan.Clear && op.When == "" && op.Scheduled == "" {
+				u.ScheduleDate(plan.First.Unix())
+			}
+		}
 	}
 
 	env := writeEnvelope{id: op.UUID, action: 1, kind: "Task6", payload: u.build()}
@@ -1560,26 +2027,30 @@ Read commands (use an incremental local state cache):
   someday [--simple|--format full|simple]
   upcoming [--simple|--format full|simple]
   search <query> [--simple|--format full|simple]
+  completed [--since RFC3339|YYYY-MM-DD] [--until RFC3339|YYYY-MM-DD] [--limit N] [--simple|--format full|simple]
+  logbook [--since RFC3339|YYYY-MM-DD] [--until RFC3339|YYYY-MM-DD] [--limit N] [--simple|--format full|simple]
   show <uuid> [--simple|--format full|simple]
   areas
   projects
   tags
 
+Normal list views hide completed tasks. Use completed/logbook for completion evidence.
+
 Environment:
   THINGS_CLI_CACHE=/path/to/things-cli-state.json  Override read-state cache file
 
-Write commands (fast — skip state loading):
+Write commands (fast - skip state loading):
   create "Title" [--note ...] [--when today|anytime|someday|inbox]
          [--deadline YYYY-MM-DD] [--scheduled YYYY-MM-DD]
          [--project UUID] [--heading UUID] [--area UUID]
          [--tags UUID,...] [--type task|project|heading] [--uuid UUID]
-         [--checklist "Item 1,Item 2,..."] [--dry-run]
+         [--checklist "Item 1,Item 2,..."] [--repeat SPEC] [--repeat-start YYYY-MM-DD] [--dry-run]
   create-area "Name" [--tags UUID,...] [--uuid UUID] [--dry-run]
   create-tag "Name" [--shorthand KEY] [--parent UUID] [--dry-run]
   add-checklist <task-uuid> "Item 1,Item 2,Item 3" [--dry-run]
   edit <uuid> [--title ...] [--note ...] [--when ...] [--deadline ...]
          [--scheduled ...] [--area UUID] [--project UUID]
-         [--heading UUID] [--tags UUID,...] [--dry-run]
+         [--heading UUID] [--tags UUID,...] [--repeat SPEC|none] [--repeat-start YYYY-MM-DD] [--dry-run]
   complete <uuid> [--dry-run]
   trash <uuid> [--dry-run]
   purge <uuid> [--dry-run]
@@ -1592,7 +2063,8 @@ Batch command (reads JSON from stdin, sends all ops in one HTTP request):
 
   Supported operations:
     {"cmd": "create", "title": "...", "note": "...", "when": "today|anytime|someday|inbox",
-     "project": "uuid", "area": "uuid", "heading": "uuid", "tags": ["uuid",...]}
+     "project": "uuid", "area": "uuid", "heading": "uuid", "tags": ["uuid",...],
+     "repeat": "every-day|weekly:mon,wed|after-completion:every-day"}
     {"cmd": "complete", "uuid": "..."}
     {"cmd": "trash", "uuid": "..."}
     {"cmd": "purge", "uuid": "..."}
@@ -1600,6 +2072,10 @@ Batch command (reads JSON from stdin, sends all ops in one HTTP request):
     {"cmd": "move-to-project", "uuid": "...", "project": "..."}
     {"cmd": "move-to-area", "uuid": "...", "area": "..."}
     {"cmd": "edit", "uuid": "...", "title": "...", "note": "...", ...}
+
+  Repeat SPEC supports: every-day, daily, weekly, every-week, weekly:mon,wed,
+    after-completion:every-day, after-completion:weekly:mon, none/off/clear.
+    Unsupported: monthly/yearly/custom end conditions through CLI.
 `, commandName(), commandName())
 }
 
@@ -1617,10 +2093,15 @@ func Main() {
 	cmd := os.Args[1]
 	args := os.Args[2:]
 	dryRun := argsHaveBoolFlag(args, "dry-run")
-	ctx := initCLI(commandNeedsHistoryHead(cmd) && !dryRun)
+	var ctx *cliContext
+	if dryRun && commandNeedsHistoryHead(cmd) {
+		ctx = &cliContext{}
+	} else {
+		ctx = initCLI(commandNeedsHistoryHead(cmd) && !dryRun)
+	}
 
 	switch cmd {
-	// Read commands — need state
+	// Read commands - need state
 	case "list":
 		cmdList(ctx.loadState(), args)
 	case "today":
@@ -1635,6 +2116,8 @@ func Main() {
 		cmdListWithOpts(ctx.loadState(), map[string]string{"upcoming": "true"}, args)
 	case "search":
 		cmdSearch(ctx.loadState(), args)
+	case "completed", "logbook":
+		cmdCompleted(ctx.loadState(), args)
 	case "show":
 		requireArgs(args, 1, "things-cli show <uuid>")
 		cmdShow(ctx.loadState(), args[0], args[1:])
@@ -1645,7 +2128,7 @@ func Main() {
 	case "tags":
 		cmdTags(ctx.loadState())
 
-	// Write commands — skip state loading
+	// Write commands - skip state loading
 	case "create":
 		cmdCreate(ctx.history, args)
 	case "create-area":

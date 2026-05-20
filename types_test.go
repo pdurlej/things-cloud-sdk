@@ -99,6 +99,17 @@ func TestTimestamp_UnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestTimestamp_MarshalJSONBeyondUnixNanoRange(t *testing.T) {
+	ts := Timestamp(time.Date(4001, 1, 1, 0, 0, 0, 0, time.UTC))
+	bs, err := (&ts).MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bs) != "64092211200" {
+		t.Fatalf("timestamp = %s, want 64092211200", string(bs))
+	}
+}
+
 func TestTaskActionItemPayload_AllFields(t *testing.T) {
 	raw := `{
 		"tt":"test","tp":0,"st":1,"ss":0,
