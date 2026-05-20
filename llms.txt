@@ -1,0 +1,50 @@
+# Things Cloud SDK
+
+Unofficial Go SDK, CLI, and MCP server for the Things Cloud sync API used by
+Things. This maintained fork is optimized for automation and agent workflows:
+predictable reads, safe writes, compact JSON, MCP tools, persistent sync, and
+read-only local SQLite inspection.
+
+Canonical module:
+
+```text
+github.com/pdurlej/things-cloud-sdk
+```
+
+Primary commands:
+
+```text
+things-cloud-cli    Preferred CLI for agents and humans.
+things-cli          Backward-compatible CLI alias.
+things-mcp          Stdio MCP server for agent integrations.
+thingsync           Sync inspection CLI.
+```
+
+Best entry points for LLMs:
+
+- `README.md` - start here for install, credentials, CLI, MCP, sync, and safety.
+- `AGENTS.md` - repository-specific agent instructions.
+- `docs/agent-cookbook.md` - copy-paste recipes for common agent workflows.
+- `docs/contracts.md` - JSON output contracts for CLI and MCP integrations.
+- `examples/agent/` - MCP config, OpenClaw notes, smoke test, sample outputs.
+- `docs/client-side-bugs.md` - Things wire-format and crash-safety notes.
+
+Recommended interface by task:
+
+- List/search tasks: `things-cloud-cli today --simple`, `things-cloud-cli search <query> --simple`, or MCP `list_tasks`/`search_tasks`.
+- Create/update tasks from an agent: use MCP tools or CLI write commands with
+  `--dry-run` first.
+- Long-running service: use `sync.Open(...).Sync()` or `QuickSync()`.
+- Local macOS inspection: use `local.OpenDefault()` read-only. Never write local
+  SQLite.
+- Raw Cloud writes: use SDK `History.Write(...)` only after reading
+  `docs/client-side-bugs.md`.
+
+Safety summary:
+
+- Do not store credentials in the repo.
+- Do not write local Things SQLite.
+- Prefer compact JSON for agent reads.
+- Confirm destructive or user-visible writes before non-dry-run execution.
+- Preserve wire-format invariants: Base58 UUIDs, `md=null` on creates, `st` for
+  schedule, `ss` for status.
