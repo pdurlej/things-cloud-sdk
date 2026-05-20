@@ -1,0 +1,16 @@
+{
+  "status": "dry-run",
+  "operation": "create task",
+  "items": [
+    {
+      "t": 0,
+      "e": "Task6",
+      "p": {
+        "tt": "Draft from agent",
+        "st": 1,
+        "ss": 0,
+        "tr": false
+      }
+    }
+  ]
+}

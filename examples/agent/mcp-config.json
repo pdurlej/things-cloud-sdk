@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "things": {
+      "command": "things-mcp",
+      "env": {
+        "THINGS_USERNAME": "you@example.com",
+        "THINGS_TOKEN": "your-things-cloud-password-or-token-alias"
+      }
+    }
+  }
+}

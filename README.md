@@ -44,6 +44,17 @@ Agent safety rules:
 - Do not invent UUID formats. Things write UUIDs must be Base58 encoded.
 - Do not confuse `status` (`ss`) with `schedule` (`st`) in raw payloads.
 
+## Agent Onboarding Files
+
+Use these files when wiring this repository into coding agents, MCP hosts, or
+LLM-assisted automation:
+
+- `AGENTS.md` - repository-specific instructions for coding agents.
+- `llms.txt` - short index for LLM crawlers and agent context loaders.
+- `docs/agent-cookbook.md` - copy-paste recipes for common agent workflows.
+- `docs/contracts.md` - stable JSON contracts for CLI and MCP integrations.
+- `examples/agent/` - MCP config, OpenClaw notes, smoke test, and sample JSON.
+
 ## Install
 
 Install the preferred CLI:
@@ -530,6 +541,10 @@ sync/                   Persistent SQLite sync engine
 state/memory/           In-memory state aggregation
 local/                  Read-only local Things SQLite reader
 example/                Lower-level SDK examples
+examples/agent/         Agent configs, smoke tests, and sample JSON
+docs/agent-cookbook.md  Agent workflow recipes
+docs/contracts.md       CLI and MCP JSON contracts
+docs/client-side-bugs.md Wire-format and crash analysis
 docs/                   Investigation notes and protocol details
 ```
 
