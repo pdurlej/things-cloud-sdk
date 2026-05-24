@@ -22,6 +22,13 @@ func TestHandleInitialize(t *testing.T) {
 	if result["protocolVersion"] != protocolVersion {
 		t.Fatalf("protocolVersion = %v, want %s", result["protocolVersion"], protocolVersion)
 	}
+	serverInfo, ok := result["serverInfo"].(map[string]string)
+	if !ok {
+		t.Fatalf("serverInfo = %T, want map[string]string", result["serverInfo"])
+	}
+	if serverInfo["version"] != serverVersion {
+		t.Fatalf("serverInfo.version = %v, want %s", serverInfo["version"], serverVersion)
+	}
 	if resp.Error != nil {
 		t.Fatalf("unexpected error: %#v", resp.Error)
 	}

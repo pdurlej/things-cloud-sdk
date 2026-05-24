@@ -18,6 +18,7 @@ import (
 )
 
 const protocolVersion = "2025-06-18"
+const serverVersion = "0.2.3"
 
 type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -107,7 +108,7 @@ func (s *mcpServer) handle(req rpcRequest) (rpcResponse, bool) {
 				"serverInfo": map[string]string{
 					"name":    "things-cloud-sdk",
 					"title":   "Things Cloud SDK MCP",
-					"version": "0.1.0",
+					"version": serverVersion,
 				},
 				"instructions": "Use these tools to read and safely update Things Cloud tasks. Destructive actions should be confirmed by the host application.",
 			},

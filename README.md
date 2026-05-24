@@ -78,8 +78,8 @@ go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
 Use a pinned tag for reproducible agent environments:
 
 ```bash
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.2
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.2
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.3
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.3
 ```
 
 Use the SDK from Go:
