@@ -9,6 +9,8 @@ writes and local read-only inspection.
 - Use `things-cloud-cli` in new docs, examples, and agent integrations.
 - Keep `things-cli` only as a backward-compatible alias.
 - Prefer `things-mcp` for MCP-based agents.
+- Use `skills/things-cloud/SKILL.md` as the public OpenClaw/ClawHub/Codex/
+  Claude Code wrapper for agent-facing Things Cloud workflows.
 - Prefer `sync.Open(...).Sync()` or `QuickSync()` for long-running services that
   need persisted state and semantic change events.
 - Use `local.OpenDefault()` only for read-only macOS SQLite inspection.
@@ -63,6 +65,10 @@ If the non-ASCII scan prints intentional content, document why in the PR.
 - `llms.txt` - short LLM crawler/agent index.
 - `docs/agent-cookbook.md` - task-oriented agent recipes.
 - `docs/contracts.md` - JSON contracts for CLI and MCP outputs.
+- `skills/things-cloud/SKILL.md` - publishable agent skill wrapper for
+  OpenClaw, ClawHub, Codex, and Claude Code.
+- `docs/integrations/openclaw-publishing.md` - ClawHub listing and OpenClaw
+  integration/showcase submission material.
 - `cmd/things-cloud-cli/` - preferred CLI entrypoint.
 - `cmd/things-mcp/` - MCP stdio server.
 - `internal/thingscli/` - shared CLI implementation and tests.

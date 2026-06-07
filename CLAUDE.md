@@ -6,6 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Go SDK for the Things 3 cloud API (Cultured Code). This is a reverse-engineered, unofficial SDK — there is no official API documentation. The client mimics `ThingsMac/32209501` and sends a base64-encoded `things-client-info` device metadata header.
 
+## Agent Integration Surface
+
+Use `skills/things-cloud/SKILL.md` as the canonical Things Cloud agent skill
+wrapper for Claude Code, Codex, OpenClaw, and ClawHub. It describes safe task
+reads/writes through `things-cloud-cli` and `things-mcp`.
+
+Default agent behavior:
+
+- Prefer `things-mcp` when MCP is available.
+- Use `things-cloud-cli --simple` for compact task-list JSON.
+- Use `--dry-run` before generated writes, then ask for confirmation.
+- Use `completed`/`logbook` for completion evidence.
+- Never write to the local Things SQLite database.
+
+ClawHub/OpenClaw publishing material lives in
+`docs/integrations/openclaw-publishing.md`.
+
 ## Build & Test Commands
 
 ```bash
@@ -66,8 +83,10 @@ The `syncutil` package provides shared utilities for sync-based CLI tools:
 ### CLI Tools (`cmd/`)
 
 See `cmd/README.md` for detailed documentation. Key tools:
-- **`things-cli`** — Full CRUD operations (create, edit, complete, trash tasks)
-  - Supports `batch` command for multiple operations in one HTTP request
+- **`things-cloud-cli`** — Preferred CLI for reads, safe dry-run writes, CRUD,
+  recurring tasks, completed/logbook evidence, and batch operations
+- **`things-cli`** — Backward-compatible alias for older integrations
+- **`things-mcp`** — Stdio MCP server for agent hosts
 - **`thingsync`** — JSON-based sync with workflow views (today, inbox, review, patterns)
 - **`synctest`** — Human-readable sync output for testing
 
@@ -97,4 +116,5 @@ See `docs/client-side-bugs.md` for the full investigation.
 
 The example app and real usage require:
 - `THINGS_USERNAME` — Things account email
-- `THINGS_PASSWORD` — Things account password
+- `THINGS_TOKEN` — Preferred automation password/token alias
+- `THINGS_PASSWORD` — Things account password, used when `THINGS_TOKEN` is not set

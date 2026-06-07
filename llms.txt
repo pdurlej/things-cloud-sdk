@@ -27,6 +27,10 @@ Best entry points for LLMs:
 - `docs/agent-cookbook.md` - copy-paste recipes for common agent workflows.
 - `docs/contracts.md` - JSON output contracts for CLI and MCP integrations.
 - `examples/agent/` - MCP config, OpenClaw notes, smoke test, sample outputs.
+- `skills/things-cloud/SKILL.md` - publishable OpenClaw/ClawHub skill wrapper
+  and reusable Codex/Claude Code operating policy.
+- `docs/integrations/openclaw-publishing.md` - ClawHub listing and OpenClaw
+  integration/showcase submission copy.
 - `docs/client-side-bugs.md` - Things wire-format and crash-safety notes.
 
 Recommended interface by task:
