@@ -75,6 +75,10 @@ LLM-assisted automation:
 - `docs/agent-cookbook.md` - copy-paste recipes for common agent workflows.
 - `docs/contracts.md` - stable JSON contracts for CLI and MCP integrations.
 - `examples/agent/` - MCP config, OpenClaw notes, smoke test, and sample JSON.
+- `skills/things-cloud/SKILL.md` - publishable OpenClaw/ClawHub skill wrapper,
+  also useful for Codex and Claude Code operating instructions.
+- `docs/integrations/openclaw-publishing.md` - ClawHub listing and OpenClaw
+  integration/showcase submission material.
 
 ## Install
 
@@ -334,6 +338,27 @@ Tools exposed by `things-mcp`:
 For destructive or user-visible changes, hosts should confirm the action before
 calling a non-dry-run write tool.
 
+## OpenClaw, Codex, and Claude Code
+
+This repo includes a publishable agent skill wrapper:
+
+```text
+skills/things-cloud/SKILL.md
+```
+
+Use it when wiring Things Cloud into OpenClaw, ClawHub, Codex, Claude Code, or
+another agent runtime that understands `SKILL.md` style instructions. The skill
+wraps `things-cloud-cli` and `things-mcp`; it does not duplicate runtime code.
+
+Local OpenClaw test install from this checkout:
+
+```bash
+openclaw skills install ./skills/things-cloud --as things-cloud
+```
+
+See `docs/integrations/openclaw-publishing.md` for ClawHub publishing commands
+and OpenClaw integration request copy.
+
 ## Go SDK Quick Start
 
 Use the SDK directly when you need Cloud API access from a Go service.
@@ -581,8 +606,10 @@ state/memory/           In-memory state aggregation
 local/                  Read-only local Things SQLite reader
 example/                Lower-level SDK examples
 examples/agent/         Agent configs, smoke tests, and sample JSON
+skills/things-cloud/    Publishable OpenClaw/ClawHub/Codex/Claude Code skill
 docs/agent-cookbook.md  Agent workflow recipes
 docs/contracts.md       CLI and MCP JSON contracts
+docs/integrations/      ClawHub and OpenClaw publishing material
 docs/client-side-bugs.md Wire-format and crash analysis
 docs/                   Investigation notes and protocol details
 ```
