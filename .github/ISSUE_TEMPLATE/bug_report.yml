@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a Things Cloud SDK, CLI, MCP, or sync bug.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste Things credentials, tokens, HAR captures, or private task data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What broke?
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - SDK
+        - things-cloud-cli
+        - things-mcp
+        - sync engine
+        - local SQLite reader
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Include sanitized commands, inputs, or dry-run JSON when possible.
+      placeholder: |
+        1. Run ...
+        2. Expected ...
+        3. Actual ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Go version, Things Cloud SDK version/tag, Things app version if relevant.
+      placeholder: |
+        OS:
+        Go:
+        SDK tag:
+        Things app:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste sanitized output only.
+      render: shell
+    validations:
+      required: false

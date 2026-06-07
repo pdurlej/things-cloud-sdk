@@ -1,25 +1,46 @@
 # Things Cloud SDK
 
-[![Go](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml/badge.svg)](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml)
+[![CI](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml/badge.svg)](https://github.com/pdurlej/things-cloud-sdk/actions/workflows/go.yml)
+[![Latest release](https://img.shields.io/github/v/release/pdurlej/things-cloud-sdk)](https://github.com/pdurlej/things-cloud-sdk/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/pdurlej/things-cloud-sdk.svg)](https://pkg.go.dev/github.com/pdurlej/things-cloud-sdk)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Unofficial Go SDK, CLI, and MCP server for the Things Cloud sync API used by
-[Things](https://culturedcode.com/things/).
+Maintained Go SDK, CLI, and MCP server for automating
+[Things](https://culturedcode.com/things/) through the Things Cloud sync API.
 
-This maintained fork is optimized for automation and agent workflows, especially
-OpenClaw-style integrations that need predictable reads, safe writes, compact
-JSON, and a stable Things Cloud module path.
+Use it when you want Things automation that is cross-platform, scriptable, and
+agent-friendly without writing directly to the local Things SQLite database.
 
 ```text
 Go module:      github.com/pdurlej/things-cloud-sdk
 Preferred CLI:  things-cloud-cli
 Compat CLI:     things-cli
 MCP server:     things-mcp
-Current use:    cloud API reads/writes, persistent sync, local read-only SQLite
+Latest release: v0.2.3
+Focus:          safe writes, stable JSON, MCP tools, persistent sync
 Maintainer:     https://github.com/pdurlej
 ```
 
-The API is reverse engineered. Treat write paths carefully, use dry runs for
-agent-generated changes, and pin release tags in production agent environments.
+## What You Can Do
+
+- Read Things tasks from Inbox, Today, Anytime, Someday, Upcoming, projects,
+  areas, tags, search results, and completed/logbook history.
+- Create, edit, complete, trash, move, and batch-update tasks from a CLI or MCP
+  host.
+- Preview write payloads with `--dry-run` before touching Things Cloud.
+- Run a persistent sync cache with typed change events for services,
+  dashboards, and feedback loops.
+- Inspect local macOS Things data through a read-only SQLite adapter.
+
+## Project Status
+
+This is a maintained, unofficial fork focused on reliable automation and agent
+integrations. It is not affiliated with Cultured Code, and the Things Cloud API
+is reverse engineered.
+
+Production agents should pin release tags, use `--dry-run` for generated
+writes, and avoid writing to the local Things SQLite database. The local reader
+is intentionally read-only.
 
 ## LLM Integration Summary
 
@@ -584,10 +605,3 @@ go build -o things-mcp ./cmd/things-mcp
 
 Before changing write payloads, read `docs/client-side-bugs.md` and add focused
 tests. Small-looking wire-format changes can break Things.app sync behavior.
-
-## Project Status
-
-This is not an official Cultured Code API. All requests and payloads are based on
-reverse engineering. Contributions should preserve the automation-friendly
-contract: stable JSON, safe dry-run behavior, typed sync changes, and explicit
-separation between Cloud writes and local read-only inspection.
