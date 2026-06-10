@@ -1,7 +1,7 @@
 ---
 name: things-cloud
 description: Manage Things 3 tasks through Things Cloud using the maintained things-cloud-sdk CLI and MCP server, with dry-run safety for agent writes.
-version: 0.1.0
+version: 0.1.1
 metadata:
   openclaw:
     requires:
@@ -41,6 +41,9 @@ metadata:
 
 Use this skill when the user wants an agent to inspect or safely update Things 3
 tasks through Things Cloud.
+
+Works with OpenClaw, Codex, and Claude Code through MCP when available, with a
+CLI fallback for hosts that prefer shell commands.
 
 Prefer the MCP server when the host supports MCP. Use the CLI as the fallback or
 when the user asks for explicit shell commands.

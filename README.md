@@ -82,6 +82,14 @@ LLM-assisted automation:
 
 ## Install
 
+Install as a ClawHub skill for OpenClaw/Codex/Claude-style agent workflows:
+
+```bash
+openclaw skills install things-cloud
+```
+
+ClawHub listing: https://clawhub.ai/pdurlej/things-cloud
+
 Install the preferred CLI:
 
 ```bash
@@ -348,7 +356,14 @@ skills/things-cloud/SKILL.md
 
 Use it when wiring Things Cloud into OpenClaw, ClawHub, Codex, Claude Code, or
 another agent runtime that understands `SKILL.md` style instructions. The skill
-wraps `things-cloud-cli` and `things-mcp`; it does not duplicate runtime code.
+works through MCP when available and falls back to `things-cloud-cli` for hosts
+that prefer shell commands; it does not duplicate runtime code.
+
+Install from ClawHub:
+
+```bash
+openclaw skills install things-cloud
+```
 
 Local OpenClaw test install from this checkout:
 
