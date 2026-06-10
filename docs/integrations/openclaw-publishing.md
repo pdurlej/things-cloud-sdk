@@ -11,6 +11,9 @@ agent runtimes that can consume `SKILL.md` style instructions. It wraps the
 maintained `things-cloud-cli` and `things-mcp` tools instead of duplicating
 runtime code.
 
+It works with OpenClaw, Codex, and Claude Code through MCP when available, with
+a CLI fallback for hosts that prefer shell commands.
+
 ## Install from This Repository
 
 After the skill is merged to `main`, OpenClaw users can install from the raw
@@ -47,9 +50,9 @@ Publish the skill:
 clawhub skill publish ./skills/things-cloud \
   --slug things-cloud \
   --name "Things Cloud" \
-  --version 0.1.0 \
+  --version 0.1.1 \
   --tags latest \
-  --changelog "Initial Things Cloud skill for safe OpenClaw, Codex, and Claude Code task automation." \
+  --changelog "Document OpenClaw, Codex, and Claude Code support via MCP with CLI fallback." \
   --clawscan-note "This skill installs and calls the maintained things-cloud-cli and things-mcp Go binaries. It requires Things Cloud credentials through THINGS_USERNAME plus THINGS_TOKEN or THINGS_PASSWORD. Agent writes should use dry-run before execution."
 ```
 
