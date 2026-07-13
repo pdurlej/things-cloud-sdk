@@ -82,13 +82,12 @@ The `syncutil` package provides shared utilities for sync-based CLI tools:
 
 ### CLI Tools (`cmd/`)
 
-See `cmd/README.md` for detailed documentation. Key tools:
+See `README.md` for installation and command documentation. Key tools:
 - **`things-cloud-cli`** — Preferred CLI for reads, safe dry-run writes, CRUD,
   recurring tasks, completed/logbook evidence, and batch operations
 - **`things-cli`** — Backward-compatible alias for older integrations
 - **`things-mcp`** — Stdio MCP server for agent hosts
 - **`thingsync`** — JSON-based sync with workflow views (today, inbox, review, patterns)
-- **`synctest`** — Human-readable sync output for testing
 
 ### Test Infrastructure
 

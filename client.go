@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 )
 
@@ -118,17 +117,16 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Things-Client-Info", base64.StdEncoding.EncodeToString(ciJSON))
 
 	if c.Debug {
-		bs, _ := httputil.DumpRequest(req, true)
-		log.Println("REQUEST:", string(bs))
+		log.Printf("REQUEST: %s %s", req.Method, req.URL.Redacted())
 	}
 
 	resp, err := c.client.Do(req)
 	if c.Debug {
-		if err == nil {
-			bs, _ := httputil.DumpResponse(resp, true)
-			log.Println("RESPONSE:", string(bs))
+		if err != nil {
+			log.Printf("RESPONSE ERROR: %v", err)
+		} else {
+			log.Printf("RESPONSE: %s", resp.Status)
 		}
-		log.Println()
 	}
 	return resp, err
 }

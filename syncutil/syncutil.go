@@ -71,7 +71,8 @@ type DailySummary struct {
 
 // BuildDailySummary calculates activity stats from today's changes.
 func BuildDailySummary(syncer *sync.Syncer) DailySummary {
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	changes, _ := syncer.ChangesSince(today)
 
 	summary := DailySummary{}

@@ -1,11 +1,14 @@
 package thingscloud
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +74,42 @@ func TestClient_UserAgent(t *testing.T) {
 	clientInfo := capturedHeaders.Get("Things-Client-Info")
 	if clientInfo == "" {
 		t.Error("things-client-info header is missing or empty")
+	}
+}
+
+func TestClient_DebugLoggingRedactsSensitiveData(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"private":"response-body"}`))
+	}))
+	defer ts.Close()
+
+	var logs bytes.Buffer
+	oldOutput := log.Writer()
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(oldOutput) })
+
+	c := New(ts.URL, "test@example.com", "secret-password")
+	c.Debug = true
+	req, err := http.NewRequest("POST", "/test", strings.NewReader(`{"password":"new-secret"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Password secret-password")
+
+	resp, err := c.do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	got := logs.String()
+	for _, sensitive := range []string{"secret-password", "new-secret", "response-body", "Authorization"} {
+		if strings.Contains(got, sensitive) {
+			t.Errorf("debug log contains sensitive value %q", sensitive)
+		}
+	}
+	if !strings.Contains(got, "REQUEST: POST") || !strings.Contains(got, "RESPONSE: 200 OK") {
+		t.Errorf("debug log is missing request or response metadata: %q", got)
 	}
 }

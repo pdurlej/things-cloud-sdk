@@ -878,7 +878,8 @@ func printInboxView(syncer *sync.Syncer) {
 
 func printReviewView(syncer *sync.Syncer) {
 	state := syncer.State()
-	todayStart := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	// Get completed tasks today
 	changes, _ := syncer.ChangesSince(todayStart)
