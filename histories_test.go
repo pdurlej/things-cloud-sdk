@@ -139,3 +139,38 @@ func TestHistory_Sync(t *testing.T) {
 		}
 	})
 }
+
+func TestHistory_WriteRejectsInvalidHistoryID(t *testing.T) {
+	c := New("https://example.com", "test@example.com", "secret")
+	h := c.HistoryWithID("invalid\nvalue")
+
+	if err := h.Write(); err == nil {
+		t.Fatal("Write succeeded with an invalid history ID")
+	}
+}
+
+func TestHistoryOperationsRejectMalformedJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*Client) error
+	}{
+		{"histories", func(c *Client) error { _, err := c.Histories(); return err }},
+		{"create history", func(c *Client) error { _, err := c.CreateHistory(); return err }},
+		{"sync", func(c *Client) error { return c.HistoryWithID("history-id").Sync() }},
+		{"write", func(c *Client) error { return c.HistoryWithID("history-id").Write() }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("not-json"))
+			}))
+			defer server.Close()
+
+			if err := tt.run(New(server.URL, "test@example.com", "secret")); err == nil {
+				t.Fatal("operation accepted malformed JSON")
+			}
+		})
+	}
+}
