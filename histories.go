@@ -258,7 +258,7 @@ func (h *History) Write(items ...Identifiable) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("write failed: %s", resp.Status)
+		return fmt.Errorf("Write failed: %s", resp.Status)
 	}
 	rs, err := io.ReadAll(resp.Body)
 	if err != nil {

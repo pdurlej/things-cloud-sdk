@@ -98,4 +98,73 @@ func TestHistory_Items(t *testing.T) {
 			t.Errorf("task-c ServerIndex = %d, want 11", indexByUUID["task-c"])
 		}
 	})
+
+	t.Run("InvalidHistoryID", func(t *testing.T) {
+		c := New("https://example.com", "test@example.com", "secret")
+		h := c.HistoryWithID("invalid\nvalue")
+		if _, _, err := h.Items(ItemsOptions{}); err == nil {
+			t.Fatal("Items succeeded with an invalid history ID")
+		}
+	})
+
+	t.Run("RejectsMalformedPages", func(t *testing.T) {
+		tests := []struct {
+			name string
+			body string
+		}{
+			{"missing items", `{"current-item-index":0,"schema":301}`},
+			{"stalled page", `{"items":[],"current-item-index":2,"schema":301}`},
+			{"empty batch", `{"items":[{}],"current-item-index":1,"schema":301}`},
+			{"missing kind", `{"items":[{"task-a":{"t":0,"p":{}}}],"current-item-index":1,"schema":301}`},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					fmt.Fprint(w, tt.body)
+				}))
+				defer server.Close()
+
+				h := New(server.URL, "test@example.com", "secret").HistoryWithID("history-id")
+				if _, _, err := h.Items(ItemsOptions{}); err == nil {
+					t.Fatal("Items accepted a malformed page")
+				}
+			})
+		}
+	})
+
+	t.Run("AllowsEmptyCaughtUpPage", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"items":[],"current-item-index":4,"schema":301}`)
+		}))
+		defer server.Close()
+
+		h := New(server.URL, "test@example.com", "secret").HistoryWithID("history-id")
+		items, more, err := h.Items(ItemsOptions{StartIndex: 4})
+		if err != nil {
+			t.Fatalf("Items rejected a valid caught-up page: %v", err)
+		}
+		if len(items) != 0 || more {
+			t.Fatalf("Items returned items=%d more=%v, want empty and caught up", len(items), more)
+		}
+	})
+
+	t.Run("AcceptsDeletionAndTombstoneKinds", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"items":[{"deleted-task":{"e":"Task6","t":2,"p":{}}},{"tombstone":{"e":"Tombstone2","t":0,"p":{"do":"deleted-task"}}}],"current-item-index":2,"schema":301}`)
+		}))
+		defer server.Close()
+
+		h := New(server.URL, "test@example.com", "secret").HistoryWithID("history-id")
+		items, _, err := h.Items(ItemsOptions{})
+		if err != nil {
+			t.Fatalf("Items rejected valid deletion kinds: %v", err)
+		}
+		if len(items) != 2 || items[0].Kind != ItemKindTask || items[1].Kind != ItemKindTombstone {
+			t.Fatalf("Items returned unexpected deletion kinds: %#v", items)
+		}
+	})
 }
