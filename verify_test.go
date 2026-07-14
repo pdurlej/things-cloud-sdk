@@ -2,6 +2,8 @@ package thingscloud
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -30,6 +32,25 @@ func TestClient_Verify(t *testing.T) {
 		_, err := c.Verify()
 		if err == nil {
 			t.Error("Expected Verification to fail, but didn't")
+		}
+	})
+
+	t.Run("InvalidEmail", func(t *testing.T) {
+		c := New("https://example.com", "invalid\nemail", "secret")
+		if _, err := c.Verify(); err == nil {
+			t.Fatal("Verify succeeded with an invalid email")
+		}
+	})
+
+	t.Run("MalformedJSON", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("not-json"))
+		}))
+		defer server.Close()
+
+		if _, err := New(server.URL, "test@example.com", "secret").Verify(); err == nil {
+			t.Fatal("Verify accepted malformed JSON")
 		}
 	})
 }

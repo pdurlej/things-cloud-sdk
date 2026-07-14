@@ -16,9 +16,9 @@ Go module:      github.com/pdurlej/things-cloud-sdk
 Preferred CLI:  things-cloud-cli
 Compat CLI:     things-cli
 MCP server:     things-mcp
-Latest release: v0.2.3
+Latest release: v0.2.4
 Focus:          safe writes, stable JSON, MCP tools, persistent sync
-Maintainer:     https://github.com/pdurlej
+Co-authors:     Piotr Durlej + OpenAI Codex
 ```
 
 ## What You Can Do
@@ -111,8 +111,8 @@ go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@latest
 Use a pinned tag for reproducible agent environments:
 
 ```bash
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.3
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.3
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.4
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.4
 ```
 
 Use the SDK from Go:

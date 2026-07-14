@@ -50,9 +50,9 @@ Publish the skill:
 clawhub skill publish ./skills/things-cloud \
   --slug things-cloud \
   --name "Things Cloud" \
-  --version 0.1.1 \
+  --version 0.1.2 \
   --tags latest \
-  --changelog "Document OpenClaw, Codex, and Claude Code support via MCP with CLI fallback." \
+  --changelog "Pin v0.2.4 binaries with fail-closed HTTP parsing and serialized persistent sync." \
   --clawscan-note "This skill installs and calls the maintained things-cloud-cli and things-mcp Go binaries. It requires Things Cloud credentials through THINGS_USERNAME plus THINGS_TOKEN or THINGS_PASSWORD. Agent writes should use dry-run before execution."
 ```
 
@@ -99,7 +99,7 @@ Things Cloud.
 ## Links
 
 - SDK/CLI/MCP: https://github.com/pdurlej/things-cloud-sdk
-- Release: https://github.com/pdurlej/things-cloud-sdk/releases/tag/v0.2.3
+- Release: https://github.com/pdurlej/things-cloud-sdk/releases/tag/v0.2.4
 - Skill: https://github.com/pdurlej/things-cloud-sdk/tree/main/skills/things-cloud
 
 ## Capabilities
@@ -115,8 +115,8 @@ Things Cloud.
 ## Setup
 
 ```bash
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.3
-go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.3
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-cloud-cli@v0.2.4
+go install github.com/pdurlej/things-cloud-sdk/cmd/things-mcp@v0.2.4
 export THINGS_USERNAME="you@example.com"
 export THINGS_TOKEN="your-things-cloud-password-or-token-alias"
 ```

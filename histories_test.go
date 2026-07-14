@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -146,6 +147,18 @@ func TestHistory_WriteRejectsInvalidHistoryID(t *testing.T) {
 
 	if err := h.Write(); err == nil {
 		t.Fatal("Write succeeded with an invalid history ID")
+	}
+}
+
+func TestHistory_WritePreservesErrorPrefix(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+	}))
+	defer server.Close()
+
+	err := New(server.URL, "test@example.com", "secret").HistoryWithID("history-id").Write()
+	if err == nil || !strings.HasPrefix(err.Error(), "Write failed:") {
+		t.Fatalf("Write error = %v, want legacy prefix", err)
 	}
 }
 

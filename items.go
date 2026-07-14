@@ -40,14 +40,13 @@ type ItemsOptions struct {
 // Note that if a item was changed multiple times it will be present multiple times in the result too.
 func (h *History) Items(opts ItemsOptions) ([]Item, bool, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("/version/1/history/%s/items", h.ID), nil)
+	if err != nil {
+		return nil, false, err
+	}
 
 	values := req.URL.Query()
 	values.Set("start-index", strconv.Itoa(opts.StartIndex))
 	req.URL.RawQuery = values.Encode()
-
-	if err != nil {
-		return nil, false, err
-	}
 	resp, err := h.Client.do(req)
 	if err != nil {
 		return nil, false, err
@@ -64,12 +63,24 @@ func (h *History) Items(opts ItemsOptions) ([]Item, bool, error) {
 	}
 	var v itemsResponse
 	if err := json.Unmarshal(bs, &v); err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("decoding items response: %w", err)
+	}
+	if v.Items == nil {
+		return nil, false, fmt.Errorf("items response is missing items")
+	}
+	if len(v.Items) == 0 && opts.StartIndex < v.CurrentItemIndex {
+		return nil, false, fmt.Errorf("items response stalled at index %d before server index %d", opts.StartIndex, v.CurrentItemIndex)
 	}
 	var items = []Item{}
 	for offset, m := range v.Items {
+		if len(m) == 0 {
+			return nil, false, fmt.Errorf("items response contains an empty batch at index %d", opts.StartIndex+offset)
+		}
 		serverIndex := opts.StartIndex + offset
 		for id, item := range m {
+			if id == "" || item.Kind == "" {
+				return nil, false, fmt.Errorf("items response contains an invalid item at index %d", serverIndex)
+			}
 			item.UUID = id
 			item.ServerIndex = serverIndex
 			item.HasServerIndex = true

@@ -5,6 +5,7 @@ package sync
 import (
 	"database/sql"
 	"strings"
+	"sync"
 	"time"
 
 	things "github.com/pdurlej/things-cloud-sdk"
@@ -29,6 +30,7 @@ type Syncer struct {
 	db      dbExecutor // current executor (db or tx)
 	client  *things.Client
 	history *things.History
+	syncMu  sync.Mutex
 }
 
 type syncOptions struct {
@@ -93,6 +95,9 @@ func (s *Syncer) QuickSync() ([]Change, error) {
 }
 
 func (s *Syncer) syncWithOptions(opts syncOptions) ([]Change, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	// Get current sync state first
 	storedHistoryID, startIndex, err := s.getSyncState()
 	if err != nil {
